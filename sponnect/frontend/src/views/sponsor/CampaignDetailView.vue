@@ -29,8 +29,10 @@ const loadCampaign = async () => {
     ])
     
     campaign.value = campaignResponse.data
-    adRequests.value = adRequestsResponse.data || []
-    applications.value = applicationsResponse.data.applications || []
+    adRequests.value = Array.isArray(adRequestsResponse.data) ? adRequestsResponse.data : 
+                       (adRequestsResponse.data?.ad_requests ? adRequestsResponse.data.ad_requests : [])
+    applications.value = Array.isArray(applicationsResponse.data) ? applicationsResponse.data : 
+                         (applicationsResponse.data?.applications ? applicationsResponse.data.applications : [])
     
   } catch (err) {
     console.error('Failed to load campaign details:', err)
@@ -186,7 +188,7 @@ onMounted(() => {
               @click.prevent="activeTab = 'requests'"
             >
               Ad Requests 
-              <span class="badge bg-primary rounded-pill ms-1">{{ adRequests.length }}</span>
+              <span class="badge bg-primary rounded-pill ms-1">{{ Array.isArray(adRequests) ? adRequests.length : 0 }}</span>
             </a>
           </li>
           <li class="nav-item">
@@ -197,7 +199,7 @@ onMounted(() => {
               @click.prevent="activeTab = 'applications'"
             >
               Applications 
-              <span class="badge bg-primary rounded-pill ms-1">{{ applications.length }}</span>
+              <span class="badge bg-primary rounded-pill ms-1">{{ Array.isArray(applications) ? applications.length : 0 }}</span>
             </a>
           </li>
         </ul>
@@ -277,17 +279,19 @@ onMounted(() => {
                     
                     <div class="d-flex justify-content-between align-items-center mb-2">
                       <div>Total Ad Requests</div>
-                      <div class="fw-bold">{{ adRequests.length }}</div>
+                      <div class="fw-bold">{{ Array.isArray(adRequests) ? adRequests.length : 0 }}</div>
                     </div>
                     
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                      <div>Pending Applications</div>
-                      <div class="fw-bold">{{ applications.filter(a => a.status === 'Pending').length }}</div>
-                    </div>
-                    
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                      <div>Accepted Partnerships</div>
-                      <div class="fw-bold">{{ adRequests.filter(r => r.status === 'Accepted').length }}</div>
+                    <div class="mb-3">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>Pending Applications</div>
+                        <div class="fw-bold">{{ Array.isArray(applications) ? applications.filter(a => a.status === 'Pending').length : 0 }}</div>
+                      </div>
+                      
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>Accepted Partnerships</div>
+                        <div class="fw-bold">{{ Array.isArray(adRequests) ? adRequests.filter(r => r.status === 'Accepted').length : 0 }}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -306,7 +310,7 @@ onMounted(() => {
                   </RouterLink>
                 </div>
                 
-                <div v-if="adRequests.length === 0" class="text-center py-4">
+                <div v-if="!Array.isArray(adRequests) || adRequests.length === 0" class="text-center py-4">
                   <i class="bi bi-inbox display-4 text-muted"></i>
                   <p class="mt-3 mb-1">No ad requests yet</p>
                   <p class="text-muted">Invite influencers to collaborate on this campaign.</p>
@@ -361,7 +365,7 @@ onMounted(() => {
               <div class="card-body">
                 <h4 class="mb-4">Influencer Applications</h4>
                 
-                <div v-if="applications.length === 0" class="text-center py-4">
+                <div v-if="!Array.isArray(applications) || applications.length === 0" class="text-center py-4">
                   <i class="bi bi-inbox display-4 text-muted"></i>
                   <p class="mt-3 mb-1">No applications yet</p>
                   <p class="text-muted">

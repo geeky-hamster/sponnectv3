@@ -25,6 +25,8 @@ const statusOptions = [
 
 // Computed property for filtered requests
 const filteredRequests = computed(() => {
+  if (!Array.isArray(adRequests.value)) return []
+  
   return adRequests.value.filter(request => {
     // Status filter
     const statusMatch = !filters.status || request.status === filters.status
@@ -46,7 +48,15 @@ const loadAdRequests = async () => {
     error.value = ''
     
     const response = await influencerService.getAdRequests()
-    adRequests.value = response.data || []
+    
+    // For the influencer endpoint, the response is a direct array (not nested in an object)
+    // Make sure we always have an array
+    if (Array.isArray(response.data)) {
+      adRequests.value = response.data
+    } else {
+      console.warn('Expected array response from adRequests endpoint, got:', typeof response.data)
+      adRequests.value = []
+    }
   } catch (err) {
     console.error('Failed to load ad requests:', err)
     error.value = 'Failed to load ad requests. Please try again later.'

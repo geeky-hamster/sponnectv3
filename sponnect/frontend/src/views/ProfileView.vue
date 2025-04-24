@@ -25,7 +25,7 @@ const isSponsor = computed(() => userRole.value === 'sponsor')
 const isInfluencer = computed(() => userRole.value === 'influencer')
 
 // Default avatar image if profile photo is missing
-const defaultAvatar = 'https://via.placeholder.com/150?text=Profile'
+const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTUwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTUwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iI2VlZWVlZSIvPjxjaXJjbGUgY3g9Ijc1IiBjeT0iNjAiIHI9IjMwIiBmaWxsPSIjYWFhYWFhIi8+PHBhdGggZD0iTTI1LDEzMCBRNzUsNzAgMTI1LDEzMCIgZmlsbD0iI2FhYWFhYSIvPjwvc3ZnPg=='
 
 // Compute display name based on available data
 const displayName = computed(() => {
@@ -531,4 +531,5 @@ const saveProfile = async () => {
   to { opacity: 1; }
 }
 </style>
+
 

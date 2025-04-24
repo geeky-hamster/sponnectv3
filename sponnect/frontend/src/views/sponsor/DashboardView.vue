@@ -18,7 +18,7 @@ onMounted(async () => {
     ])
     
     campaigns.value = campaignsResponse.data
-    adRequests.value = requestsResponse.data
+    adRequests.value = requestsResponse.data.ad_requests || requestsResponse.data || []
     
   } catch (err) {
     console.error('Error loading sponsor dashboard:', err)
@@ -70,7 +70,7 @@ onMounted(async () => {
                   <div class="bg-success rounded-circle p-3 me-3">
                     <i class="bi bi-chat-dots text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ adRequests.filter(r => r.status === 'Pending' || r.status === 'Negotiating').length }}</h3>
+                  <h3 class="mb-0">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Pending' || r.status === 'Negotiating').length : 0 }}</h3>
                 </div>
               </div>
             </div>
@@ -84,7 +84,7 @@ onMounted(async () => {
                   <div class="bg-info rounded-circle p-3 me-3">
                     <i class="bi bi-handshake text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ adRequests.filter(r => r.status === 'Accepted').length }}</h3>
+                  <h3 class="mb-0">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Accepted').length : 0 }}</h3>
                 </div>
               </div>
             </div>
@@ -157,7 +157,7 @@ onMounted(async () => {
             </div>
           </div>
           <div class="card-body p-0">
-            <div v-if="adRequests.length === 0" class="p-4 text-center">
+            <div v-if="!adRequests.length" class="p-4 text-center">
               <p>No ad requests found.</p>
             </div>
             <div v-else class="table-responsive">
@@ -172,10 +172,10 @@ onMounted(async () => {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="request in adRequests.slice(0, 5)" :key="request.id">
+                  <tr v-for="request in adRequests.slice ? adRequests.slice(0, 5) : []" :key="request.id">
                     <td>{{ request.influencer_name }}</td>
                     <td>{{ request.campaign_name }}</td>
-                    <td>${{ request.payment_amount.toLocaleString() }}</td>
+                    <td>${{ request.payment_amount ? request.payment_amount.toLocaleString() : '0' }}</td>
                     <td>
                       <span 
                         :class="{
@@ -188,7 +188,7 @@ onMounted(async () => {
                         {{ request.status }}
                       </span>
                     </td>
-                    <td>{{ new Date(request.updated_at).toLocaleDateString() }}</td>
+                    <td>{{ request.updated_at ? new Date(request.updated_at).toLocaleDateString() : 'N/A' }}</td>
                   </tr>
                 </tbody>
               </table>

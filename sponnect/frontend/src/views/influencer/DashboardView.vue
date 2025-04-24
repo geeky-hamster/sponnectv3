@@ -17,8 +17,8 @@ onMounted(async () => {
       searchService.searchCampaigns() // Get public campaigns
     ])
     
-    adRequests.value = requestsResponse.data
-    publicCampaigns.value = campaignsResponse.data.slice(0, 5) // Limit to 5 campaigns
+    adRequests.value = Array.isArray(requestsResponse.data) ? requestsResponse.data : []
+    publicCampaigns.value = Array.isArray(campaignsResponse.data) ? campaignsResponse.data.slice(0, 5) : [] // Limit to 5 campaigns
     
   } catch (err) {
     console.error('Error loading influencer dashboard:', err)
@@ -56,7 +56,7 @@ onMounted(async () => {
                   <div class="bg-primary rounded-circle p-3 me-3">
                     <i class="bi bi-envelope text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ adRequests.length }}</h3>
+                  <h3 class="mb-0">{{ adRequests.length || 0 }}</h3>
                 </div>
               </div>
             </div>
@@ -70,7 +70,7 @@ onMounted(async () => {
                   <div class="bg-warning rounded-circle p-3 me-3">
                     <i class="bi bi-chat-dots text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ adRequests.filter(r => r.status === 'Negotiating').length }}</h3>
+                  <h3 class="mb-0">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Negotiating').length : 0 }}</h3>
                 </div>
               </div>
             </div>
@@ -84,7 +84,7 @@ onMounted(async () => {
                   <div class="bg-success rounded-circle p-3 me-3">
                     <i class="bi bi-check-circle text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ adRequests.filter(r => r.status === 'Accepted').length }}</h3>
+                  <h3 class="mb-0">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Accepted').length : 0 }}</h3>
                 </div>
               </div>
             </div>
@@ -102,7 +102,7 @@ onMounted(async () => {
             </div>
           </div>
           <div class="card-body p-0">
-            <div v-if="adRequests.length === 0" class="p-4 text-center">
+            <div v-if="!adRequests.length" class="p-4 text-center">
               <p>You don't have any ad requests yet.</p>
             </div>
             <div v-else class="table-responsive">
@@ -117,9 +117,9 @@ onMounted(async () => {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="request in adRequests.slice(0, 5)" :key="request.id">
+                  <tr v-for="request in adRequests.slice ? adRequests.slice(0, 5) : []" :key="request.id">
                     <td>{{ request.campaign_name }}</td>
-                    <td>${{ request.payment_amount.toLocaleString() }}</td>
+                    <td>${{ request.payment_amount ? request.payment_amount.toLocaleString() : '0' }}</td>
                     <td>
                       <span 
                         :class="{
@@ -132,7 +132,7 @@ onMounted(async () => {
                         {{ request.status }}
                       </span>
                     </td>
-                    <td>{{ new Date(request.updated_at).toLocaleDateString() }}</td>
+                    <td>{{ request.updated_at ? new Date(request.updated_at).toLocaleDateString() : 'N/A' }}</td>
                     <td>
                       <router-link :to="`/influencer/ad-requests/${request.id}`" class="btn btn-sm btn-outline-primary">
                         View
@@ -156,7 +156,7 @@ onMounted(async () => {
             </div>
           </div>
           <div class="card-body">
-            <div v-if="publicCampaigns.length === 0" class="text-center">
+            <div v-if="!publicCampaigns.length" class="text-center">
               <p>No public campaigns available at the moment.</p>
             </div>
             <div v-else class="row g-4">
@@ -166,7 +166,7 @@ onMounted(async () => {
                     <h5 class="card-title">{{ campaign.name }}</h5>
                     <div class="d-flex justify-content-between mb-2">
                       <span class="text-muted">Budget:</span>
-                      <span class="fw-bold">${{ campaign.budget.toLocaleString() }}</span>
+                      <span class="fw-bold">${{ campaign.budget ? campaign.budget.toLocaleString() : '0' }}</span>
                     </div>
                     <p class="card-text mb-3">{{ campaign.description?.substring(0, 120) }}{{ campaign.description?.length > 120 ? '...' : '' }}</p>
                     <router-link :to="`/campaigns/${campaign.id}`" class="btn btn-outline-primary">

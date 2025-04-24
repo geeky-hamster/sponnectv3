@@ -14,6 +14,9 @@ const successMessage = ref('')
 const selectedCampaign = ref(null)
 const showApplyModal = ref(false)
 
+// Placeholder image as data URL
+const campaignPlaceholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIyNSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIyNSIgZmlsbD0iI2VlZWVlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMThweCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iIzU1NTU1NSI+Q2FtcGFpZ24gSW1hZ2U8L3RleHQ+PC9zdmc+'
+
 // Search and filter
 const filters = reactive({
   search: '',
@@ -373,7 +376,7 @@ onMounted(() => {
           <div class="card h-100 border-0 shadow-sm campaign-card" :title="campaign.name">
             <!-- Campaign Image -->
             <div class="campaign-card-img" 
-                 :style="{ backgroundImage: `url(${campaign.image_url || 'https://via.placeholder.com/400x225?text=Campaign'})` }">
+                 :style="{ backgroundImage: `url(${campaign.image_url || campaignPlaceholder})` }">
               <div class="campaign-card-category">
                 {{ categories.find(c => c.id === campaign.category)?.name || 'Uncategorized' }}
               </div>
@@ -404,49 +407,51 @@ onMounted(() => {
         </div>
       </div>
       
-      <!-- Apply Modal -->
-      <div v-if="showApplyModal" class="modal-backdrop" @click.self="closeApplyModal">
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content border-0 shadow">
-            <div class="modal-header border-0">
+      <!-- Apply Modal - Using Bootstrap's modal classes -->
+      <div v-if="showApplyModal" class="modal show d-block" tabindex="-1" role="dialog">
+        <div class="modal-backdrop fade show" @click="closeApplyModal"></div>
+        <div class="modal-dialog modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
               <h5 class="modal-title">Apply for Campaign</h5>
-              <button type="button" class="btn-close" @click="closeApplyModal"></button>
+              <button type="button" class="btn-close" @click="closeApplyModal" aria-label="Close"></button>
             </div>
             
             <div class="modal-body">
               <div v-if="selectedCampaign" class="mb-4">
-                <h4>{{ selectedCampaign.name }}</h4>
+                <h4 class="text-dark">{{ selectedCampaign.name }}</h4>
                 
-                <div class="campaign-details mb-3">
+                <div class="campaign-details mb-3 p-3 border rounded">
                   <div class="row g-3">
                     <div class="col-6">
-                      <label class="text-muted d-block mb-1">Budget</label>
+                      <label class="text-muted d-block mb-1 fw-bold">Budget</label>
                       <div class="fs-5 fw-bold text-primary">{{ formatCurrency(selectedCampaign.budget) }}</div>
                     </div>
                     <div class="col-6">
-                      <label class="text-muted d-block mb-1">Category</label>
-                      <div>{{ categories.find(c => c.id === selectedCampaign.category)?.name || 'Uncategorized' }}</div>
+                      <label class="text-muted d-block mb-1 fw-bold">Category</label>
+                      <div class="fw-medium">{{ categories.find(c => c.id === selectedCampaign.category)?.name || 'Uncategorized' }}</div>
                     </div>
                   </div>
                 </div>
                 
-                <div class="bg-light p-3 rounded mb-4">
-                  <h6 class="mb-2">Description</h6>
-                  <p class="mb-0 whitespace-pre-wrap">{{ selectedCampaign.description || 'No description provided.' }}</p>
+                <div class="bg-light p-3 rounded mb-4 border">
+                  <h6 class="mb-2 fw-bold">Description</h6>
+                  <p class="mb-0 whitespace-pre-wrap text-dark">{{ selectedCampaign.description || 'No description provided.' }}</p>
                 </div>
                 
-                <div class="bg-light p-3 rounded">
-                  <h6 class="mb-2">Requirements</h6>
-                  <p class="mb-0 whitespace-pre-wrap">{{ selectedCampaign.requirements || 'No specific requirements provided.' }}</p>
+                <div class="bg-light p-3 rounded border">
+                  <h6 class="mb-2 fw-bold">Requirements</h6>
+                  <p class="mb-0 whitespace-pre-wrap text-dark">{{ selectedCampaign.requirements || 'No specific requirements provided.' }}</p>
                 </div>
               </div>
               
               <hr class="my-4" />
               
-              <form @submit.prevent="submitApplication">
+              <form @submit.prevent="submitApplication" class="bg-white p-3 rounded border">
+                <h5 class="mb-3">Your Application</h5>
                 <!-- Proposed Amount -->
                 <div class="mb-3">
-                  <label for="proposedAmount" class="form-label">Your Proposed Amount</label>
+                  <label for="proposedAmount" class="form-label fw-bold">Your Proposed Amount</label>
                   <div class="input-group">
                     <span class="input-group-text">$</span>
                     <input 
@@ -465,7 +470,7 @@ onMounted(() => {
                 
                 <!-- Message -->
                 <div class="mb-3">
-                  <label for="message" class="form-label">Message to Sponsor</label>
+                  <label for="message" class="form-label fw-bold">Message to Sponsor</label>
                   <textarea 
                     id="message" 
                     class="form-control" 
@@ -479,7 +484,7 @@ onMounted(() => {
               </form>
             </div>
             
-            <div class="modal-footer border-0">
+            <div class="modal-footer">
               <button type="button" class="btn btn-outline-secondary" @click="closeApplyModal">
                 Cancel
               </button>
@@ -549,23 +554,9 @@ onMounted(() => {
   max-height: 4.5rem; /* Approx 3 lines */
 }
 
+/* For Bootstrap modal in Vue */
 .modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1050;
-}
-
-.modal-dialog {
-  max-width: 600px;
-  width: 100%;
-  margin: 1.75rem auto;
+  opacity: 0.5;
 }
 
 .whitespace-pre-wrap {

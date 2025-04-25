@@ -42,7 +42,27 @@ export const sponsorService = {
 export const influencerService = {
   // Ad request management
   getAdRequests: (params) => apiService.get('/api/influencer/ad_requests', { params }),
-  respondToAdRequest: (requestId, data) => apiService.patch(`/api/influencer/ad_requests/${requestId}`, data),
+  
+  respondToAdRequest: (requestId, data) => {
+    console.log(`Sending request to /api/influencer/ad_requests/${requestId} with data:`, data)
+    
+    // Validate data before sending
+    const validData = { 
+      action: data.action 
+    }
+    
+    // Only include message if it's not empty
+    if (data.message) {
+      validData.message = data.message
+    }
+    
+    // Only include payment amount for negotiation
+    if (data.action === 'negotiate' && data.payment_amount) {
+      validData.payment_amount = parseFloat(data.payment_amount)
+    }
+    
+    return apiService.patch(`/api/influencer/ad_requests/${requestId}`, validData)
+  },
   
   // Campaign applications
   getAvailableCampaigns: (params) => apiService.get('/api/search/campaigns', { params }),
@@ -59,20 +79,7 @@ export const influencerService = {
   getPayments: (adRequestId) => apiService.get(`/api/influencer/ad_requests/${adRequestId}/payments`),
   
   // Negotiations
-  getNegotiations: () => apiService.get('/api/influencer/negotiations'),
-  
-  // Ad Request Progress Updates
-  getProgressUpdates(adRequestId) {
-    return apiService.get(`/api/influencer/ad-requests/${adRequestId}/progress-updates`)
-  },
-  
-  createProgressUpdate(adRequestId, payload) {
-    return apiService.post(`/api/influencer/ad-requests/${adRequestId}/progress-updates`, payload)
-  },
-  
-  getPayments(adRequestId) {
-    return apiService.get(`/api/influencer/ad-requests/${adRequestId}/payments`)
-  }
+  getNegotiations: () => apiService.get('/api/influencer/negotiations')
 }
 
 // Search Services

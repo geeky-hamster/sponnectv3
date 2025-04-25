@@ -55,7 +55,9 @@ const loadAdRequest = async () => {
     }
   } catch (err) {
     console.error('Failed to load ad request details:', err)
-    error.value = 'Failed to load ad request details. Please try again later.'
+    const errorMsg = err.response?.data?.message || 'Failed to load ad request details. Please try again later.'
+    error.value = errorMsg
+    adRequest.value = null // Reset adRequest to prevent null reference errors
   } finally {
     loading.value = false
   }
@@ -411,13 +413,20 @@ const initializePaymentForm = () => {
 
 // Enhanced loadAdRequest to also load progress updates and payments if relevant
 const enhancedLoadAdRequest = async () => {
-  await loadAdRequest()
-  
-  // If request is accepted, load additional data
-  if (adRequest.value && adRequest.value.status === 'Accepted') {
-    await loadProgressUpdates()
-    await loadPayments()
-    initializePaymentForm()
+  try {
+    await loadAdRequest()
+    
+    // If request is accepted, load additional data
+    if (adRequest.value && adRequest.value.status === 'Accepted') {
+      await Promise.all([
+        loadProgressUpdates(),
+        loadPayments()
+      ])
+      initializePaymentForm()
+    }
+  } catch (err) {
+    console.error('Error in enhanced load:', err)
+    // Error already handled in loadAdRequest
   }
 }
 </script>
@@ -486,7 +495,7 @@ const enhancedLoadAdRequest = async () => {
       </div>
       
       <!-- Details Tab Content -->
-      <div v-if="activeTab === 'details'" class="card border-0 shadow-sm mb-4">
+      <div v-if="activeTab === 'details' && adRequest" class="card border-0 shadow-sm mb-4">
         <div class="card-body">
           <h4 class="card-title mb-4">Request Details</h4>
           
@@ -529,7 +538,7 @@ const enhancedLoadAdRequest = async () => {
       </div>
       
       <!-- Negotiations Tab Content -->
-      <div v-if="activeTab === 'negotiations'" class="card border-0 shadow-sm mb-4">
+      <div v-if="activeTab === 'negotiations' && adRequest" class="card border-0 shadow-sm mb-4">
         <div class="card-body">
           <h4 class="card-title mb-4">Negotiation History</h4>
           
@@ -580,7 +589,7 @@ const enhancedLoadAdRequest = async () => {
       </div>
       
       <!-- Progress Updates Tab Content -->
-      <div v-if="activeTab === 'progress'" class="card border-0 shadow-sm mb-4">
+      <div v-if="activeTab === 'progress' && adRequest" class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white border-0 py-3">
           <h5 class="card-title mb-0">Progress Updates</h5>
         </div>
@@ -695,7 +704,7 @@ const enhancedLoadAdRequest = async () => {
       </div>
       
       <!-- Payments Tab Content -->
-      <div v-if="activeTab === 'payments'" class="card border-0 shadow-sm mb-4">
+      <div v-if="activeTab === 'payments' && adRequest" class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
           <h5 class="card-title mb-0">Payment History</h5>
           <button 

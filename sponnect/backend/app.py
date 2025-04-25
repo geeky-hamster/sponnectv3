@@ -122,16 +122,40 @@ def serialize_campaign_detail(campaign):
     return data
 
 def serialize_ad_request_detail(ad_request):
-    return {
-        'id': ad_request.id, 'campaign_id': ad_request.campaign_id, 'influencer_id': ad_request.influencer_id,
-        'initiator_id': ad_request.initiator_id, 'message': ad_request.message, 'requirements': ad_request.requirements,
-        'payment_amount': ad_request.payment_amount, 'status': ad_request.status, 'last_offer_by': ad_request.last_offer_by,
-        'created_at': ad_request.created_at.isoformat() if ad_request.created_at else None,
-        'updated_at': ad_request.updated_at.isoformat() if ad_request.updated_at else None,
-        # Include basic related info (avoid large joins for now)
-        'campaign_name': ad_request.campaign.name if ad_request.campaign else None,
-        'influencer_name': ad_request.target_influencer.influencer_name if ad_request.target_influencer else None,
-    }
+    try:
+        # Safely access related fields
+        campaign_name = ad_request.campaign.name if ad_request.campaign else "Unknown Campaign"
+        influencer_name = None
+        
+        # Handle possible None relationships
+        if ad_request.target_influencer:
+            influencer_name = ad_request.target_influencer.username or ad_request.target_influencer.email or "Unknown"
+        else:
+            influencer_name = "Unknown Influencer"
+            
+        return {
+            'id': ad_request.id, 
+            'campaign_id': ad_request.campaign_id, 
+            'influencer_id': ad_request.influencer_id,
+            'initiator_id': ad_request.initiator_id, 
+            'message': ad_request.message, 
+            'requirements': ad_request.requirements,
+            'payment_amount': ad_request.payment_amount, 
+            'status': ad_request.status, 
+            'last_offer_by': ad_request.last_offer_by,
+            'created_at': ad_request.created_at.isoformat() if ad_request.created_at else None,
+            'updated_at': ad_request.updated_at.isoformat() if ad_request.updated_at else None,
+            # Include basic related info
+            'campaign_name': campaign_name,
+            'influencer_name': influencer_name,
+        }
+    except Exception as e:
+        app.logger.error(f"Error in serialize_ad_request_detail: {str(e)}")
+        # Return minimal data to prevent complete failure
+        return {
+            'id': ad_request.id if hasattr(ad_request, 'id') else None,
+            'error': f"Error serializing ad request: {str(e)}"
+        }
 
 def serialize_negotiation_history(history_item):
     return {
@@ -612,45 +636,55 @@ def sponsor_get_all_ad_requests():
 @sponsor_required
 def sponsor_get_ad_request(ad_request_id):
     sponsor_id = get_jwt_identity()
-    ad_request = db.session.get(AdRequest, ad_request_id)
     
-    if not ad_request:
-        return jsonify({"message": "Ad Request not found"}), 404
-    
-    # Check ownership via campaign
-    if ad_request.campaign.sponsor_id != sponsor_id:
-        return jsonify({"message": "Access denied"}), 403
-    
-    # Get negotiation history
-    negotiations = NegotiationHistory.query.filter_by(ad_request_id=ad_request_id).order_by(NegotiationHistory.created_at).all()
-    negotiation_history = [
-        {
-            "id": neg.id,
-            "action": neg.action,
-            "message": neg.message,
-            "payment_amount": neg.payment_amount,
-            "actor": neg.user_role,
-            "created_at": neg.created_at.isoformat()
-        } for neg in negotiations
-    ]
-    
-    ad_request_data = {
-        "id": ad_request.id,
-        "campaign_id": ad_request.campaign_id,
-        "campaign_name": ad_request.campaign.name,
-        "influencer_id": ad_request.influencer_id,
-        "influencer_name": ad_request.influencer.username,
-        "status": ad_request.status,
-        "payment_amount": ad_request.payment_amount,
-        "last_offer_by": ad_request.last_offer_by,
-        "requirements": ad_request.requirements,
-        "message": ad_request.message,
-        "created_at": ad_request.created_at.isoformat(),
-        "updated_at": ad_request.updated_at.isoformat() if ad_request.updated_at else None,
-        "negotiation_history": negotiation_history
-    }
-    
-    return jsonify(ad_request_data), 200
+    try:
+        ad_request = db.session.get(AdRequest, ad_request_id)
+        
+        if not ad_request:
+            return jsonify({"message": "Ad Request not found"}), 404
+        
+        # Check ownership via campaign
+        if not ad_request.campaign or ad_request.campaign.sponsor_id != sponsor_id:
+            return jsonify({"message": "Access denied"}), 403
+        
+        # Get negotiation history
+        negotiations = NegotiationHistory.query.filter_by(ad_request_id=ad_request_id).order_by(NegotiationHistory.created_at).all()
+        negotiation_history = [
+            {
+                "id": neg.id,
+                "action": neg.action,
+                "message": neg.message,
+                "payment_amount": neg.payment_amount,
+                "actor": neg.user_role,
+                "created_at": neg.created_at.isoformat()
+            } for neg in negotiations
+        ]
+        
+        # Safe access to related objects
+        campaign_name = ad_request.campaign.name if ad_request.campaign else "Unknown Campaign"
+        influencer_name = ad_request.target_influencer.username if ad_request.target_influencer else "Unknown Influencer"
+        
+        ad_request_data = {
+            "id": ad_request.id,
+            "campaign_id": ad_request.campaign_id,
+            "campaign_name": campaign_name,
+            "influencer_id": ad_request.influencer_id,
+            "influencer_name": influencer_name,
+            "status": ad_request.status,
+            "payment_amount": ad_request.payment_amount,
+            "last_offer_by": ad_request.last_offer_by,
+            "requirements": ad_request.requirements,
+            "message": ad_request.message,
+            "created_at": ad_request.created_at.isoformat() if ad_request.created_at else None,
+            "updated_at": ad_request.updated_at.isoformat() if ad_request.updated_at else None,
+            "negotiation_history": negotiation_history
+        }
+        
+        return jsonify(ad_request_data), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in sponsor_get_ad_request: {str(e)}")
+        return jsonify({"message": f"An error occurred while fetching the ad request: {str(e)}"}), 500
 
 @app.route('/api/sponsor/ad_requests/<int:ad_request_id>', methods=['PUT']) # Sponsor responds to negotiation
 @jwt_required()
@@ -741,58 +775,97 @@ def influencer_get_ad_requests():
 @jwt_required()
 @influencer_required
 def influencer_action_ad_request(ad_request_id):
-    influencer_id = get_jwt_identity()
-    ad_request = AdRequest.query.filter_by(id=ad_request_id, influencer_id=influencer_id).first()
-    if not ad_request: return jsonify({"message": "Ad Request not found/denied"}), 404
+    try:
+        influencer_id = get_jwt_identity()
+        data = request.get_json()
+        
+        app.logger.info(f"Influencer {influencer_id} attempting action on ad_request {ad_request_id}")
+        app.logger.info(f"Received payload: {data}")
+        
+        # Validate payload
+        if not data:
+            return jsonify({"message": "No data provided"}), 400
+            
+        action = data.get('action')
+        if not action:
+            return jsonify({"message": "Action is required"}), 400
+        
+        if action not in ['accept', 'reject', 'negotiate']:
+            return jsonify({"message": f"Invalid action '{action}'. Use 'accept', 'reject', or 'negotiate'."}), 400
+            
+        # Find ad request
+        ad_request = AdRequest.query.filter_by(id=ad_request_id, influencer_id=influencer_id).first()
+        if not ad_request: 
+            return jsonify({"message": "Ad Request not found/denied"}), 404
+            
+        app.logger.info(f"Current ad_request status: {ad_request.status}, last_offer_by: {ad_request.last_offer_by}")
+        
+        # Check allowed states for action
+        allowed_states = ['Pending']
+        if ad_request.status == 'Negotiating' and ad_request.last_offer_by == 'sponsor':
+            allowed_states.append('Negotiating') # Allow response if sponsor made last offer
 
-    # Check allowed states for action
-    allowed_states = ['Pending']
-    if ad_request.status == 'Negotiating' and ad_request.last_offer_by == 'sponsor':
-         allowed_states.append('Negotiating') # Allow response if sponsor made last offer
+        if ad_request.status not in allowed_states:
+            return jsonify({
+                "message": f"Cannot action request in status '{ad_request.status}' or not influencer's turn",
+                "status": ad_request.status,
+                "last_offer_by": ad_request.last_offer_by
+            }), 400
 
-    if ad_request.status not in allowed_states:
-         return jsonify({"message": f"Cannot action request in status '{ad_request.status}' or not influencer's turn"}), 400
+        # Handle based on action
+        if action == 'accept':
+            ad_request.status = 'Accepted'
+            message = "Ad Request accepted"
+        elif action == 'reject':
+            ad_request.status = 'Rejected'
+            message = "Ad Request rejected"
+        elif action == 'negotiate':
+            # Influencer makes counter-offer
+            new_payment = data.get('payment_amount')
+            new_message = data.get('message')
+            
+            if new_payment is None: 
+                return jsonify({"message": "Payment amount required to negotiate"}), 400
+                
+            try: 
+                payment_amount = float(new_payment)
+                ad_request.payment_amount = payment_amount
+            except (ValueError, TypeError): 
+                return jsonify({"message": f"Invalid payment amount: {new_payment}"}), 400
 
-    data = request.get_json()
-    action = data.get('action') # 'accept', 'reject', 'negotiate'
+            if new_message: 
+                ad_request.message = new_message
+                
+            ad_request.status = 'Negotiating' # Set/Keep status
+            ad_request.last_offer_by = 'influencer'
+            message = "Negotiation offer sent to sponsor"
 
-    # Create history record
-    history = NegotiationHistory(
-        ad_request_id=ad_request.id,
-        user_id=influencer_id,
-        user_role='influencer',
-        action=action,
-        message=data.get('message'),
-        payment_amount=data.get('payment_amount', ad_request.payment_amount),
-        requirements=None  # Influencers don't typically modify requirements
-    )
-    db.session.add(history)
+        # Create history record
+        history = NegotiationHistory(
+            ad_request_id=ad_request.id,
+            user_id=influencer_id,
+            user_role='influencer',
+            action=action,
+            message=data.get('message'),
+            payment_amount=data.get('payment_amount', ad_request.payment_amount),
+            requirements=None  # Influencers don't typically modify requirements
+        )
+        db.session.add(history)
 
-    if action == 'accept':
-        ad_request.status = 'Accepted'
-        message = "Ad Request accepted"
-    elif action == 'reject':
-        ad_request.status = 'Rejected'
-        message = "Ad Request rejected"
-    elif action == 'negotiate':
-        # Influencer makes counter-offer
-        new_payment = data.get('payment_amount')
-        new_message = data.get('message')
-        if new_payment is None: return jsonify({"message": "Payment amount required to negotiate"}), 400
-        try: ad_request.payment_amount = float(new_payment)
-        except (ValueError, TypeError): return jsonify({"message": "Invalid payment amount"}), 400
-
-        if new_message: ad_request.message = new_message
-        ad_request.status = 'Negotiating' # Set/Keep status
-        ad_request.last_offer_by = 'influencer'
-        message = "Negotiation offer sent to sponsor"
-    else:
-        return jsonify({"message": "Invalid action. Use 'accept', 'reject', or 'negotiate'."}), 400
-
-    ad_request.updated_at = datetime.utcnow()
-    db.session.commit()
-    # Add notification logic later
-    return jsonify({"message": message, "ad_request": serialize_ad_request_detail(ad_request)}), 200
+        ad_request.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        app.logger.info(f"Action '{action}' successful for ad_request {ad_request_id}")
+        
+        return jsonify({
+            "message": message, 
+            "ad_request": serialize_ad_request_detail(ad_request)
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in influencer_action_ad_request: {str(e)}")
+        db.session.rollback()
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
 
 # == Influencer: Apply to Public Campaigns ==
 @app.route('/api/influencer/campaigns/<int:campaign_id>/apply', methods=['POST'])

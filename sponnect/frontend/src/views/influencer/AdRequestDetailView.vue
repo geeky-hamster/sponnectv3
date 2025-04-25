@@ -52,12 +52,28 @@ const loadAdRequest = async () => {
     loading.value = true
     error.value = ''
     
-    // Since we're using the getAdRequests endpoint that returns all requests,
-    // we need to filter for the specific one based on the ID
-    const response = await influencerService.getAdRequests()
-    const foundRequest = (response.data || []).find(req => req.id === parseInt(requestId))
+    // Use a direct API call to get a specific ad request by ID
+    const response = await influencerService.getAdRequests({ id: requestId })
+    console.log("Ad request response:", response)
+    
+    // Check if we have valid data
+    if (!response.data || response.data.length === 0) {
+      error.value = 'Ad request not found'
+      adRequest.value = null
+      return
+    }
+    
+    // Find the specific request by ID (might be returned as an array)
+    let foundRequest = null
+    if (Array.isArray(response.data)) {
+      foundRequest = response.data.find(req => req.id === parseInt(requestId))
+    } else {
+      // Handle case where API might return a single object
+      foundRequest = response.data.id === parseInt(requestId) ? response.data : null
+    }
     
     if (foundRequest) {
+      console.log("Found ad request:", foundRequest)
       adRequest.value = foundRequest
       
       // Pre-fill counter offer with current amount
@@ -65,11 +81,14 @@ const loadAdRequest = async () => {
         form.counterOffer = foundRequest.payment_amount
       }
     } else {
+      console.error('Ad request not found in response data')
       error.value = 'Ad request not found'
+      adRequest.value = null
     }
   } catch (err) {
     console.error('Failed to load ad request:', err)
     error.value = 'Failed to load ad request details. Please try again later.'
+    adRequest.value = null
   } finally {
     loading.value = false
   }
@@ -144,13 +163,16 @@ const handleSubmit = async () => {
     
     // Build the payload based on the action
     const payload = {
-      status: form.action === 'accept' ? 'Accepted' : form.action === 'reject' ? 'Rejected' : 'Negotiating',
+      action: form.action,
       message: form.message,
-      payment_amount: form.action === 'negotiate' ? form.counterOffer : adRequest.value.payment_amount
+      payment_amount: form.action === 'negotiate' ? parseFloat(form.counterOffer) : adRequest.value.payment_amount
     }
     
+    console.log("Sending payload to server:", payload)
+    
     // Send the response to the ad request
-    await influencerService.respondToAdRequest(adRequest.value.id, payload)
+    const response = await influencerService.respondToAdRequest(adRequest.value.id, payload)
+    console.log("Server response:", response)
     
     // Update success message
     successMessage.value = form.action === 'accept' 
@@ -159,16 +181,30 @@ const handleSubmit = async () => {
         ? 'Offer rejected. The sponsor will be notified.' 
         : 'Counter offer sent. Waiting for the sponsor to respond.'
     
-    // Reload ad request to get updated status
-    await loadAdRequest()
-    
     // Reset form
     form.action = ''
     form.message = ''
+    form.counterOffer = null
+    
+    // Reload ad request to get updated status
+    await loadAdRequest()
     
   } catch (err) {
     console.error('Failed to respond to ad request:', err)
-    error.value = 'Failed to submit your response. Please try again later.'
+    
+    let errorMessage = 'Failed to submit your response. Please try again later.'
+    
+    // Get specific error from response if available
+    if (err.response && err.response.data && err.response.data.message) {
+      errorMessage = `Error: ${err.response.data.message}`
+      
+      // Add status information if available
+      if (err.response.data.status) {
+        errorMessage += ` (Status: ${err.response.data.status}, Last action by: ${err.response.data.last_offer_by || 'unknown'})`
+      }
+    }
+    
+    error.value = errorMessage
   } finally {
     submitLoading.value = false
   }

@@ -88,6 +88,7 @@ const formatCurrency = (amount) => {
 const canRespond = computed(() => {
   if (!adRequest.value) return false
   
+  // Show action buttons when it's the sponsor's turn to respond
   return adRequest.value.status === 'Negotiating' && 
          adRequest.value.last_offer_by === 'influencer'
 })
@@ -165,7 +166,12 @@ const deleteAdRequest = async () => {
 
 // Load data on component mount
 onMounted(() => {
-  enhancedLoadAdRequest()
+  loadAdRequest().then(() => {
+    if (adRequest.value) {
+      // Initialize payment amount for counter-offers
+      newMessage.payment_amount = adRequest.value.payment_amount
+    }
+  })
 })
 
 // Map actions to display text
@@ -494,7 +500,7 @@ const enhancedLoadAdRequest = async () => {
         </ul>
       </div>
       
-      <!-- Details Tab Content -->
+      <!-- Ad Request Details Section -->
       <div v-if="activeTab === 'details' && adRequest" class="card border-0 shadow-sm mb-4">
         <div class="card-body">
           <h4 class="card-title mb-4">Request Details</h4>
@@ -537,11 +543,86 @@ const enhancedLoadAdRequest = async () => {
         </div>
       </div>
       
-      <!-- Negotiations Tab Content -->
+      <!-- Update the negotiation tab to include action buttons -->
       <div v-if="activeTab === 'negotiations' && adRequest" class="card border-0 shadow-sm mb-4">
         <div class="card-body">
-          <h4 class="card-title mb-4">Negotiation History</h4>
-          
+          <h5 class="card-title border-bottom pb-2 mb-3">Negotiation History</h5>
+
+          <!-- Add Negotiation Actions Section - This is what was missing -->
+          <div v-if="canRespond" class="alert alert-info mb-4">
+            <h6 class="alert-heading font-weight-bold">Respond to Offer</h6>
+            <p>The influencer has made a counter-offer of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong></p>
+            <p v-if="adRequest.message" class="mt-2">
+              <strong>Message:</strong> {{ adRequest.message }}
+            </p>
+            
+            <hr>
+            
+            <div class="mt-3">
+              <div class="mb-3 btn-group w-100">
+                <button 
+                  @click="newMessage.action = 'accept'" 
+                  :class="['btn', newMessage.action === 'accept' ? 'btn-success' : 'btn-outline-success']"
+                >
+                  Accept
+                </button>
+                <button 
+                  @click="newMessage.action = 'negotiate'" 
+                  :class="['btn', newMessage.action === 'negotiate' ? 'btn-primary' : 'btn-outline-primary']"
+                >
+                  Counter Offer
+                </button>
+                <button 
+                  @click="newMessage.action = 'reject'" 
+                  :class="['btn', newMessage.action === 'reject' ? 'btn-danger' : 'btn-outline-danger']"
+                >
+                  Reject
+                </button>
+              </div>
+              
+              <div v-if="newMessage.action === 'negotiate'" class="form-group mb-3">
+                <label for="payment" class="form-label">Your Counter Offer (USD)</label>
+                <div class="input-group">
+                  <span class="input-group-text">$</span>
+                  <input
+                    id="payment"
+                    type="number"
+                    v-model="newMessage.payment_amount"
+                    class="form-control"
+                    placeholder="Enter amount"
+                    min="1"
+                  />
+                </div>
+              </div>
+              
+              <div v-if="newMessage.action !== 'accept'" class="form-group mb-3">
+                <label class="form-label">Message {{ newMessage.action === 'reject' ? '(Required)' : '' }}</label>
+                <textarea
+                  v-model="newMessage.message"
+                  class="form-control"
+                  rows="3"
+                  :placeholder="newMessage.action === 'negotiate' ? 'Explain your counter offer' : 'Explain why you are rejecting'"
+                ></textarea>
+              </div>
+              
+              <div class="d-flex justify-content-end">
+                <button 
+                  @click="sendMessage"
+                  class="btn btn-primary"
+                  :disabled="sendingMessage"
+                >
+                  <span v-if="sendingMessage">
+                    <i class="fas fa-spinner fa-spin me-2"></i> Sending...
+                  </span>
+                  <span v-else>
+                    Send Response
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Negotiation Timeline -->
           <div v-if="negotiationHistory.length === 0" class="text-center py-3">
             <p class="text-muted mb-0">No negotiation history available.</p>
           </div>

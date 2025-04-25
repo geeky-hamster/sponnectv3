@@ -616,7 +616,7 @@ def sponsor_get_all_ad_requests():
                 "campaign_id": ar.campaign_id,
                 "campaign_name": ar.campaign.name if ar.campaign else "Unknown",
                 "influencer_id": ar.influencer_id,
-                "influencer_name": ar.influencer.username if ar.influencer else "Unknown",
+                "influencer_name": ar.target_influencer.username if ar.target_influencer else "Unknown",
                 "status": ar.status,
                 "payment_amount": ar.payment_amount,
                 "last_offer_by": ar.last_offer_by,
@@ -655,7 +655,9 @@ def sponsor_get_ad_request(ad_request_id):
                 "action": neg.action,
                 "message": neg.message,
                 "payment_amount": neg.payment_amount,
+                "requirements": neg.requirements,
                 "actor": neg.user_role,
+                "actor_name": neg.user.username if neg.user else "Unknown User",
                 "created_at": neg.created_at.isoformat()
             } for neg in negotiations
         ]
@@ -664,12 +666,26 @@ def sponsor_get_ad_request(ad_request_id):
         campaign_name = ad_request.campaign.name if ad_request.campaign else "Unknown Campaign"
         influencer_name = ad_request.target_influencer.username if ad_request.target_influencer else "Unknown Influencer"
         
+        # Get influencer details for more context
+        influencer_details = None
+        if ad_request.target_influencer:
+            influencer = ad_request.target_influencer
+            influencer_details = {
+                "id": influencer.id,
+                "username": influencer.username,
+                "influencer_name": influencer.influencer_name,
+                "category": influencer.category,
+                "niche": influencer.niche,
+                "reach": influencer.reach
+            }
+        
         ad_request_data = {
             "id": ad_request.id,
             "campaign_id": ad_request.campaign_id,
             "campaign_name": campaign_name,
             "influencer_id": ad_request.influencer_id,
             "influencer_name": influencer_name,
+            "influencer_details": influencer_details,
             "status": ad_request.status,
             "payment_amount": ad_request.payment_amount,
             "last_offer_by": ad_request.last_offer_by,
@@ -677,7 +693,12 @@ def sponsor_get_ad_request(ad_request_id):
             "message": ad_request.message,
             "created_at": ad_request.created_at.isoformat() if ad_request.created_at else None,
             "updated_at": ad_request.updated_at.isoformat() if ad_request.updated_at else None,
-            "negotiation_history": negotiation_history
+            "negotiation_history": negotiation_history,
+            # Add clear negotiation status flags for UI
+            "can_respond": ad_request.status == 'Negotiating' and ad_request.last_offer_by == 'influencer',
+            "is_active": ad_request.status in ['Pending', 'Negotiating'],
+            "is_completed": ad_request.status == 'Accepted',
+            "is_rejected": ad_request.status == 'Rejected'
         }
         
         return jsonify(ad_request_data), 200

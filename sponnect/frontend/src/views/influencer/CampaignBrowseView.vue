@@ -213,7 +213,22 @@ const submitApplication = async () => {
     
   } catch (err) {
     console.error('Failed to apply for campaign:', err)
-    error.value = 'Failed to submit your application. Please try again later.'
+    
+    // Handle duplicate ad request case (409 Conflict)
+    if (err.response && err.response.status === 409) {
+      const adRequestId = err.response.data.ad_request_id
+      
+      if (adRequestId) {
+        // Close the modal
+        closeApplyModal()
+        // Set error with link to existing request
+        error.value = `${err.response.data.message}. <a href="/influencer/ad-requests/${adRequestId}" class="alert-link">View existing request</a>`
+      } else {
+        error.value = err.response.data.message || 'You already have a request for this campaign'
+      }
+    } else {
+      error.value = 'Failed to submit your application. Please try again later.'
+    }
   } finally {
     applyLoading.value = false
   }
@@ -247,7 +262,7 @@ onMounted(() => {
       
       <!-- Error Alert -->
       <div v-if="error" class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-        {{ error }}
+        <span v-html="error"></span>
         <button type="button" class="btn-close" @click="error = ''"></button>
       </div>
       

@@ -27,7 +27,15 @@ export const sponsorService = {
   // Applications
   getCampaignApplications: (campaignId, params) => apiService.get(`/api/sponsor/campaigns/${campaignId}/applications`, { params }),
   acceptApplication: (requestId) => apiService.patch(`/api/sponsor/applications/${requestId}/accept`),
-  rejectApplication: (requestId) => apiService.patch(`/api/sponsor/applications/${requestId}/reject`)
+  rejectApplication: (requestId) => apiService.patch(`/api/sponsor/applications/${requestId}/reject`),
+  
+  // Progress Updates
+  getProgressUpdates: (adRequestId) => apiService.get(`/api/sponsor/ad_requests/${adRequestId}/progress`),
+  reviewProgressUpdate: (adRequestId, updateId, data) => apiService.patch(`/api/sponsor/ad_requests/${adRequestId}/progress/${updateId}`, data),
+  
+  // Payments
+  getPayments: (adRequestId) => apiService.get(`/api/sponsor/ad_requests/${adRequestId}/payments`),
+  createPayment: (adRequestId, data) => apiService.post(`/api/sponsor/ad_requests/${adRequestId}/payments`, data)
 }
 
 // Influencer Services
@@ -43,8 +51,28 @@ export const influencerService = {
     return apiService.post(`/api/influencer/campaigns/${campaignId}/apply`, data);
   },
   
+  // Progress Updates
+  getProgressUpdates: (adRequestId) => apiService.get(`/api/influencer/ad_requests/${adRequestId}/progress`),
+  addProgressUpdate: (adRequestId, data) => apiService.post(`/api/influencer/ad_requests/${adRequestId}/progress`, data),
+  
+  // Payments
+  getPayments: (adRequestId) => apiService.get(`/api/influencer/ad_requests/${adRequestId}/payments`),
+  
   // Negotiations
-  getNegotiations: () => apiService.get('/api/influencer/negotiations')
+  getNegotiations: () => apiService.get('/api/influencer/negotiations'),
+  
+  // Ad Request Progress Updates
+  getProgressUpdates(adRequestId) {
+    return apiService.get(`/api/influencer/ad-requests/${adRequestId}/progress-updates`)
+  },
+  
+  createProgressUpdate(adRequestId, payload) {
+    return apiService.post(`/api/influencer/ad-requests/${adRequestId}/progress-updates`, payload)
+  },
+  
+  getPayments(adRequestId) {
+    return apiService.get(`/api/influencer/ad-requests/${adRequestId}/payments`)
+  }
 }
 
 // Search Services

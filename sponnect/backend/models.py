@@ -89,6 +89,63 @@ class AdRequest(db.Model):
     def __repr__(self):
         return f'<AdRequest {self.id} Campaign:{self.campaign_id} Status:{self.status}>'
 
+class Payment(db.Model):
+    __tablename__ = 'payments'
+    id = db.Column(db.Integer, primary_key=True)
+    ad_request_id = db.Column(db.Integer, db.ForeignKey('ad_requests.id', ondelete='CASCADE'), nullable=False, index=True)
+    amount = db.Column(db.Float, nullable=False)
+    platform_fee = db.Column(db.Float, nullable=False, default=0.0)  # Platform fee (1% of payment amount)
+    influencer_amount = db.Column(db.Float, nullable=False, default=0.0)  # Amount after deducting platform fee
+    status = db.Column(db.String(20), nullable=False, default='Pending')  # 'Pending', 'Completed', 'Failed'
+    payment_method = db.Column(db.String(50), nullable=False, default='Razorpay')
+    transaction_id = db.Column(db.String(100), nullable=True)
+    payment_response = db.Column(db.Text, nullable=True)  # JSON storage for payment gateway response
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    ad_request = db.relationship('AdRequest', backref=db.backref('payments', lazy='dynamic'))
+    
+    def __repr__(self):
+        return f'<Payment {self.id} for AdRequest {self.ad_request_id} Amount:{self.amount} Status:{self.status}>'
+
+class NegotiationHistory(db.Model):
+    __tablename__ = 'negotiation_history'
+    id = db.Column(db.Integer, primary_key=True)
+    ad_request_id = db.Column(db.Integer, db.ForeignKey('ad_requests.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_role = db.Column(db.String(20), nullable=False)  # 'sponsor' or 'influencer'
+    action = db.Column(db.String(20), nullable=False)  # 'propose', 'counter', 'accept', 'reject'
+    message = db.Column(db.Text, nullable=True)
+    payment_amount = db.Column(db.Float, nullable=True)
+    requirements = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    ad_request = db.relationship('AdRequest', backref=db.backref('negotiation_history', lazy='dynamic', cascade='all, delete-orphan'))
+    user = db.relationship('User')
+    
+    def __repr__(self):
+        return f'<NegotiationHistory {self.id} AdRequest:{self.ad_request_id} Action:{self.action}>'
+
+class ProgressUpdate(db.Model):
+    __tablename__ = 'progress_updates'
+    id = db.Column(db.Integer, primary_key=True)
+    ad_request_id = db.Column(db.Integer, db.ForeignKey('ad_requests.id', ondelete='CASCADE'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    media_urls = db.Column(db.Text, nullable=True)  # Comma-separated URLs of images, videos, etc.
+    metrics_data = db.Column(db.Text, nullable=True)  # JSON string of metrics like views, engagement, etc.
+    status = db.Column(db.String(20), default='Pending')  # Pending, Approved, Revision Requested
+    feedback = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    ad_request = db.relationship('AdRequest', backref=db.backref('progress_updates', lazy='dynamic'))
+    
+    def __repr__(self):
+        return f'<ProgressUpdate {self.id} for AdRequest {self.ad_request_id}>'
+
 # Add Indexes
 db.Index('idx_adrequest_campaign_influencer', AdRequest.campaign_id, AdRequest.influencer_id)
 db.Index('idx_adrequest_status', AdRequest.status)

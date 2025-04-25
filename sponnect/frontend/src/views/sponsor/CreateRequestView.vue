@@ -130,19 +130,18 @@ const formatCurrency = (amount) => {
 
 // Handle form submission
 const handleSubmit = async () => {
-  // Basic validation
   if (!form.value.influencer_id) {
     error.value = 'Please select an influencer'
     return
   }
   
-  if (!form.value.payment_amount || isNaN(form.value.payment_amount) || form.value.payment_amount <= 0) {
-    error.value = 'Please enter a valid payment amount'
+  if (!form.value.payment_amount) {
+    error.value = 'Please enter a payment amount'
     return
   }
   
   if (!form.value.requirements) {
-    error.value = 'Please specify requirements for the collaboration'
+    error.value = 'Please specify requirements'
     return
   }
   
@@ -163,7 +162,19 @@ const handleSubmit = async () => {
     router.push(`/sponsor/campaigns/${campaignId.value}?tab=requests`)
   } catch (err) {
     console.error('Failed to create ad request:', err)
-    error.value = 'Failed to create ad request. Please check your inputs and try again.'
+    
+    // Handle duplicate ad request case (409 Conflict)
+    if (err.response && err.response.status === 409) {
+      const adRequestId = err.response.data.ad_request_id
+      
+      if (adRequestId) {
+        error.value = `${err.response.data.message}. <a href="/sponsor/ad-requests/${adRequestId}" class="alert-link">View existing request</a>` 
+      } else {
+        error.value = err.response.data.message || 'A request for this influencer already exists'
+      }
+    } else {
+      error.value = 'Failed to create ad request. Please check your inputs and try again.'
+    }
   } finally {
     submitting.value = false
   }
@@ -225,7 +236,7 @@ onMounted(() => {
       
       <!-- Error alert -->
       <div v-else-if="error" class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-        {{ error }}
+        <span v-html="error"></span>
         <button type="button" class="btn-close" @click="error = ''"></button>
       </div>
       

@@ -27,7 +27,8 @@ const loadAdRequests = async () => {
   
   try {
     const response = await sponsorService.getAdRequests()
-    adRequests.value = response.data || []
+    // Backend returns data in the format { ad_requests: [...] }
+    adRequests.value = response.data?.ad_requests || []
     applyFilters()
   } catch (err) {
     console.error('Failed to load ad requests:', err)

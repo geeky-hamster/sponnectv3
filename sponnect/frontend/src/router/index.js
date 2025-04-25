@@ -15,6 +15,7 @@ const SponsorCampaignEdit = () => import('../views/sponsor/CampaignEditView.vue'
 const SponsorAdRequests = () => import('../views/sponsor/AdRequestsView.vue')
 const SponsorAdRequestDetail = () => import('../views/sponsor/AdRequestDetailView.vue')
 const SponsorCreateRequest = () => import('../views/sponsor/CreateRequestView.vue')
+const RazorpayPaymentView = () => import('../views/sponsor/RazorpayPaymentView.vue')
 const InfluencerDashboard = () => import('../views/influencer/DashboardView.vue')
 const InfluencerAdRequests = () => import('../views/influencer/AdRequestsView.vue')
 const InfluencerAdRequestDetail = () => import('../views/influencer/AdRequestDetailView.vue')
@@ -102,6 +103,12 @@ const router = createRouter({
       path: '/sponsor/ad-requests/:id',
       name: 'sponsor-ad-request-detail',
       component: SponsorAdRequestDetail,
+      meta: { requiresAuth: true, role: 'sponsor' }
+    },
+    {
+      path: '/sponsor/payments/:adRequestId',
+      name: 'razorpay-payment',
+      component: RazorpayPaymentView,
       meta: { requiresAuth: true, role: 'sponsor' }
     },
     

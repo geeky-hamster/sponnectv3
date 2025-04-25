@@ -7,7 +7,21 @@ const authStore = useAuthStore()
 
 const isLoggedIn = computed(() => authStore.isAuthenticated)
 const userRole = computed(() => authStore.userRole)
-const userName = computed(() => authStore.user?.name || 'User')
+const userName = computed(() => {
+  if (authStore.user) {
+    // For sponsors, prefer company_name
+    if (userRole.value === 'sponsor' && authStore.user.company_name) {
+      return authStore.user.company_name
+    }
+    // For influencers, prefer influencer_name
+    if (userRole.value === 'influencer' && authStore.user.influencer_name) {
+      return authStore.user.influencer_name
+    }
+    // Fall back to username
+    return authStore.user.username || 'User'
+  }
+  return 'User'
+})
 
 const logout = () => {
   authStore.logout()

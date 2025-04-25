@@ -33,6 +33,14 @@ api.interceptors.response.use(response => {
 }, async error => {
   const originalRequest = error.config;
   
+  // Log the error for debugging
+  console.error('API error:', {
+    url: originalRequest.url,
+    method: originalRequest.method,
+    status: error.response?.status,
+    data: error.response?.data
+  });
+  
   // If it's an unauthorized error and we haven't tried refreshing yet
   if (error.response && error.response.status === 401 && !originalRequest._retry) {
     originalRequest._retry = true;
@@ -61,6 +69,8 @@ api.interceptors.response.use(response => {
           // Retry the original request
           return api(originalRequest);
         }
+      } else {
+        console.error('No refresh token available for token refresh');
       }
     } catch (refreshError) {
       console.error('Token refresh failed:', refreshError);
@@ -79,6 +89,7 @@ export const useAuthStore = defineStore('auth', () => {
   // State
   const token = ref(localStorage.getItem('token') || null)
   const userRole = ref(localStorage.getItem('userRole') || null)
+  const user = ref(null)
   
   // Getters
   const isAuthenticated = computed(() => !!token.value)
@@ -97,6 +108,9 @@ export const useAuthStore = defineStore('auth', () => {
       
       token.value = accessToken
       userRole.value = role
+      
+      // Fetch user profile after successful login
+      await getProfile()
       
       return response
     } catch (error) {
@@ -130,6 +144,7 @@ export const useAuthStore = defineStore('auth', () => {
   const getProfile = async () => {
     try {
       const response = await api.get('/api/profile')
+      user.value = response.data
       return response.data
     } catch (error) {
       console.error('Get profile error:', error)
@@ -144,6 +159,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     token,
     userRole,
+    user,
     isAuthenticated,
     login,
     register,

@@ -13,6 +13,7 @@ class User(db.Model):
     role = db.Column(db.String(20), nullable=False, default='influencer', index=True) # 'influencer', 'sponsor', 'admin'
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     sponsor_approved = db.Column(db.Boolean, nullable=True, default=None) # For sponsors: True/False/None
+    influencer_approved = db.Column(db.Boolean, nullable=True, default=None) # For influencers: True/False/None
     is_flagged = db.Column(db.Boolean, default=False, nullable=False) # For admin flagging
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

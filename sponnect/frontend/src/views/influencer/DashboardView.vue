@@ -170,7 +170,7 @@ onMounted(async () => {
                     </div>
                     <p class="card-text mb-3">{{ campaign.description?.substring(0, 120) }}{{ campaign.description?.length > 120 ? '...' : '' }}</p>
                     <router-link :to="`/campaigns/${campaign.id}`" class="btn btn-outline-primary">
-                      View Details
+                      View Details & Apply
                     </router-link>
                   </div>
                 </div>

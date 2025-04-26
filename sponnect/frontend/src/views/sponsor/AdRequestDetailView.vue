@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, reactive } from 'vue'
+import { ref, onMounted, computed, reactive, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { sponsorService, negotiationService } from '../../services/api'
 
@@ -166,12 +166,21 @@ const deleteAdRequest = async () => {
 
 // Load data on component mount
 onMounted(() => {
-  loadAdRequest().then(() => {
+  enhancedLoadAdRequest().then(() => {
     if (adRequest.value) {
       // Initialize payment amount for counter-offers
       newMessage.payment_amount = adRequest.value.payment_amount
     }
   })
+})
+
+// Watch for tab changes to load the right data
+watch(activeTab, (newTab) => {
+  if (newTab === 'progress' && adRequest.value && adRequest.value.status === 'Accepted') {
+    loadProgressUpdates()
+  } else if (newTab === 'payments' && adRequest.value && adRequest.value.status === 'Accepted') {
+    loadPayments()
+  }
 })
 
 // Map actions to display text
@@ -264,8 +273,11 @@ const reviewUpdate = async (updateId, status, feedback) => {
   try {
     submittingReview.value = true
     
+    // Convert status to action format that the backend expects
+    const action = status === 'Approved' ? 'approve' : 'request_revision';
+    
     const payload = {
-      status: status,
+      action: action,
       feedback: status === 'Revision Requested' ? feedback : ''
     }
     
@@ -550,8 +562,12 @@ const enhancedLoadAdRequest = async () => {
 
           <!-- Add Negotiation Actions Section - This is what was missing -->
           <div v-if="canRespond" class="alert alert-info mb-4">
-            <h6 class="alert-heading font-weight-bold">Respond to Offer</h6>
-            <p>The influencer has made a counter-offer of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong></p>
+            <div class="d-flex justify-content-between mb-2">
+              <h6 class="alert-heading font-weight-bold mb-0">Respond to Offer</h6>
+              <span class="badge bg-warning">Action Required</span>
+            </div>
+            
+            <p>The influencer has proposed a payment amount of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong></p>
             <p v-if="adRequest.message" class="mt-2">
               <strong>Message:</strong> {{ adRequest.message }}
             </p>
@@ -559,28 +575,31 @@ const enhancedLoadAdRequest = async () => {
             <hr>
             
             <div class="mt-3">
-              <div class="mb-3 btn-group w-100">
-                <button 
-                  @click="newMessage.action = 'accept'" 
-                  :class="['btn', newMessage.action === 'accept' ? 'btn-success' : 'btn-outline-success']"
-                >
-                  Accept
-                </button>
-                <button 
-                  @click="newMessage.action = 'negotiate'" 
-                  :class="['btn', newMessage.action === 'negotiate' ? 'btn-primary' : 'btn-outline-primary']"
-                >
-                  Counter Offer
-                </button>
-                <button 
-                  @click="newMessage.action = 'reject'" 
-                  :class="['btn', newMessage.action === 'reject' ? 'btn-danger' : 'btn-outline-danger']"
-                >
-                  Reject
-                </button>
+              <div class="response-options mb-3">
+                <div class="mb-2"><strong>Select your response:</strong></div>
+                <div class="mb-3 btn-group w-100">
+                  <button 
+                    @click="newMessage.action = 'accept'" 
+                    :class="['btn', newMessage.action === 'accept' ? 'btn-success' : 'btn-outline-success']"
+                  >
+                    <i class="bi bi-check-circle me-1"></i> Accept Offer
+                  </button>
+                  <button 
+                    @click="newMessage.action = 'negotiate'" 
+                    :class="['btn', newMessage.action === 'negotiate' ? 'btn-primary' : 'btn-outline-primary']"
+                  >
+                    <i class="bi bi-arrow-left-right me-1"></i> Counter Offer
+                  </button>
+                  <button 
+                    @click="newMessage.action = 'reject'" 
+                    :class="['btn', newMessage.action === 'reject' ? 'btn-danger' : 'btn-outline-danger']"
+                  >
+                    <i class="bi bi-x-circle me-1"></i> Reject
+                  </button>
+                </div>
               </div>
               
-              <div v-if="newMessage.action === 'negotiate'" class="form-group mb-3">
+              <div v-if="newMessage.action === 'negotiate'" class="form-group mb-3 shadow-sm p-3 border rounded bg-light">
                 <label for="payment" class="form-label">Your Counter Offer (USD)</label>
                 <div class="input-group">
                   <span class="input-group-text">$</span>
@@ -593,10 +612,11 @@ const enhancedLoadAdRequest = async () => {
                     min="1"
                   />
                 </div>
+                <small class="form-text text-muted">Current offer: {{ formatCurrency(adRequest.payment_amount) }}</small>
               </div>
               
               <div v-if="newMessage.action !== 'accept'" class="form-group mb-3">
-                <label class="form-label">Message {{ newMessage.action === 'reject' ? '(Required)' : '' }}</label>
+                <label class="form-label">{{ newMessage.action === 'negotiate' ? 'Explanation' : 'Reason for Rejection' }} {{ newMessage.action === 'reject' ? '(Required)' : '' }}</label>
                 <textarea
                   v-model="newMessage.message"
                   class="form-control"
@@ -612,14 +632,39 @@ const enhancedLoadAdRequest = async () => {
                   :disabled="sendingMessage"
                 >
                   <span v-if="sendingMessage">
-                    <i class="fas fa-spinner fa-spin me-2"></i> Sending...
+                    <i class="bi bi-hourglass-split me-2"></i> Sending...
                   </span>
                   <span v-else>
-                    Send Response
+                    <i class="bi bi-send me-1"></i> Send Response
                   </span>
                 </button>
               </div>
             </div>
+          </div>
+          
+          <!-- Current Status Alert when no action needed -->
+          <div v-else-if="adRequest" class="alert mb-4" :class="{
+            'alert-success': adRequest.status === 'Accepted',
+            'alert-danger': adRequest.status === 'Rejected',
+            'alert-warning': adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'sponsor',
+            'alert-info': adRequest.status === 'Pending'
+          }">
+            <div class="d-flex justify-content-between">
+              <h6 class="alert-heading font-weight-bold mb-1">Status: {{ adRequest.status }}</h6>
+              <span v-if="adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'sponsor'" class="badge bg-warning">Waiting for influencer</span>
+            </div>
+            <p class="mb-0" v-if="adRequest.status === 'Accepted'">
+              <i class="bi bi-check-circle me-1"></i> You have accepted the offer of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong>. The collaboration is now active.
+            </p>
+            <p class="mb-0" v-else-if="adRequest.status === 'Rejected'">
+              <i class="bi bi-x-circle me-1"></i> This offer has been rejected and the negotiation is closed.
+            </p>
+            <p class="mb-0" v-else-if="adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'sponsor'">
+              <i class="bi bi-hourglass me-1"></i> You made an offer of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong>. Waiting for the influencer to respond.
+            </p>
+            <p class="mb-0" v-else-if="adRequest.status === 'Pending'">
+              <i class="bi bi-clock me-1"></i> This request is pending initial response from the influencer.
+            </p>
           </div>
 
           <!-- Negotiation Timeline -->
@@ -1005,6 +1050,51 @@ const enhancedLoadAdRequest = async () => {
 
 .influencer-message {
   margin-right: auto;
+}
+
+.sponsor-message .message-content {
+  background-color: rgba(var(--bs-primary-rgb), 0.1);
+  border-top-right-radius: 0 !important;
+}
+
+.influencer-message .message-content {
+  background-color: rgba(var(--bs-info-rgb), 0.1);
+  border-top-left-radius: 0 !important;
+}
+
+/* Scrollbar styling */
+.chat-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.chat-container::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+/* Tab navigation styles */
+.nav-tabs .nav-link {
+  color: #6c757d;
+}
+
+.nav-tabs .nav-link.active {
+  color: var(--bs-primary);
+  font-weight: 500;
+}
+
+.nav-tabs .nav-link:hover:not(.active) {
+  color: #343a40;
+}
+
+/* Modal styles */
+.modal {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+</style> 
 }
 
 .sponsor-message .message-content {

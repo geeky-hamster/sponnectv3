@@ -93,6 +93,11 @@ const viewCampaignDetails = (campaignId) => {
   })
 }
 
+// Add a link to browse all campaigns
+const browseAllCampaigns = () => {
+  router.push('/influencer/campaigns/browse')
+}
+
 // Reset filters
 const resetFilters = () => {
   searchQuery.value = ''
@@ -148,13 +153,13 @@ onMounted(() => {
     <div class="container">
       <!-- Header with breadcrumb -->
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Find Campaigns</h1>
+        <h1>Search Campaigns</h1>
         <nav aria-label="breadcrumb">
           <ol class="breadcrumb mb-0">
             <li class="breadcrumb-item">
               <RouterLink to="/influencer/dashboard">Dashboard</RouterLink>
             </li>
-            <li class="breadcrumb-item active">Find Campaigns</li>
+            <li class="breadcrumb-item active">Search Campaigns</li>
           </ol>
         </nav>
       </div>
@@ -256,6 +261,18 @@ onMounted(() => {
         </div>
       </div>
       
+      <!-- Browse all campaigns link -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5>Search Results <span class="text-muted fs-6">({{ campaigns.length || 0 }} campaigns found)</span></h5>
+        <button 
+          type="button" 
+          class="btn btn-outline-primary"
+          @click="browseAllCampaigns"
+        >
+          <i class="bi bi-grid me-1"></i>Browse All Campaigns
+        </button>
+      </div>
+      
       <!-- Loading state -->
       <div v-if="loading" class="text-center py-5">
         <div class="spinner-border text-primary" role="status">
@@ -308,7 +325,7 @@ onMounted(() => {
                   @click="viewCampaignDetails(campaign.id)" 
                   class="btn btn-outline-primary w-100"
                 >
-                  <i class="bi bi-eye me-2"></i>View Details
+                  <i class="bi bi-eye me-2"></i>View Full Details & Apply
                 </button>
               </div>
             </div>

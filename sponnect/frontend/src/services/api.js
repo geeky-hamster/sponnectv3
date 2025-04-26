@@ -79,7 +79,8 @@ export const influencerService = {
   getPayments: (adRequestId) => apiService.get(`/api/influencer/ad_requests/${adRequestId}/payments`),
   
   // Negotiations
-  getNegotiations: () => apiService.get('/api/influencer/negotiations')
+  getNegotiations: () => apiService.get('/api/influencer/negotiations'),
+  getNegotiationHistory: (adRequestId) => apiService.get(`/api/ad_requests/${adRequestId}/history`)
 }
 
 // Search Services
@@ -111,6 +112,14 @@ export const adminService = {
   getPendingSponsors: () => apiService.get('/api/admin/pending_sponsors'),
   approveSponsor: (sponsorId) => apiService.patch(`/api/admin/sponsors/${sponsorId}/approve`),
   rejectSponsor: (sponsorId) => apiService.patch(`/api/admin/sponsors/${sponsorId}/reject`),
+  
+  // Influencer management
+  getPendingInfluencers: () => apiService.get('/api/admin/pending_influencers'),
+  approveInfluencer: (influencerId) => apiService.patch(`/api/admin/influencers/${influencerId}/approve`),
+  rejectInfluencer: (influencerId) => apiService.patch(`/api/admin/influencers/${influencerId}/reject`),
+  
+  // Get all pending users (both sponsors and influencers)
+  getPendingUsers: () => apiService.get('/api/admin/pending_users'),
   
   // Campaign management
   getCampaigns: (params) => apiService.get('/api/admin/campaigns', { params }),

@@ -227,6 +227,14 @@ onMounted(() => {
         </div>
       </div>
       
+      <!-- Search Results Header -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5>Search Results</h5>
+        <div>
+          <span class="text-muted me-2">{{ influencers.length || 0 }} influencers found</span>
+        </div>
+      </div>
+      
       <!-- Loading state -->
       <div v-if="loading" class="text-center py-5">
         <div class="spinner-border text-primary" role="status">
@@ -275,7 +283,7 @@ onMounted(() => {
                   @click="createAdRequest(influencer.id)" 
                   class="btn btn-primary w-100"
                 >
-                  <i class="bi bi-plus-circle me-2"></i>Create Ad Request
+                  <i class="bi bi-plus-circle me-2"></i>Create Ad Request with This Influencer
                 </button>
               </div>
             </div>
@@ -288,6 +296,14 @@ onMounted(() => {
 
 <style scoped>
 .influencer-search-view {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+</style> 
   animation: fadeIn 0.5s ease-in-out;
 }
 

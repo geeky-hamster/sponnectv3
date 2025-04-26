@@ -1,9 +1,13 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { influencerService } from '../../services/api'
 
 const router = useRouter()
+const route = useRoute()
+
+// Check if a campaign ID is provided in the route
+const selectedCampaignId = computed(() => route.params.id ? parseInt(route.params.id) : null)
 
 // State
 const loading = ref(true)
@@ -101,6 +105,14 @@ const loadCampaigns = async () => {
     
     const response = await influencerService.getAvailableCampaigns()
     campaigns.value = response.data || []
+    
+    // If a specific campaign ID was provided, open that campaign automatically
+    if (selectedCampaignId.value && campaigns.value.length) {
+      const campaign = campaigns.value.find(c => c.id === selectedCampaignId.value)
+      if (campaign) {
+        openApplyModal(campaign)
+      }
+    }
     
   } catch (err) {
     console.error('Failed to load campaigns:', err)
@@ -245,9 +257,21 @@ const resetFilters = () => {
 
 // View campaign details
 const viewCampaignDetails = (campaign) => {
-  // This could navigate to a detailed view if needed
+  // Update the URL without reloading the page
+  router.push(`/campaigns/${campaign.id}`)
   openApplyModal(campaign)
 }
+
+// Watch for changes in the route params
+watch(() => route.params.id, (newId) => {
+  if (newId && campaigns.value.length) {
+    const campaignId = parseInt(newId)
+    const campaign = campaigns.value.find(c => c.id === campaignId)
+    if (campaign) {
+      openApplyModal(campaign)
+    }
+  }
+})
 
 // Load data on component mount
 onMounted(() => {
@@ -258,7 +282,16 @@ onMounted(() => {
 <template>
   <div class="campaign-browse-view py-5">
     <div class="container">
-      <h1 class="mb-4">Browse Campaigns</h1>
+      <h1 class="mb-4">{{ selectedCampaignId ? 'Campaign Details' : 'Browse Campaigns' }}</h1>
+      
+      <!-- Breadcrumbs navigation -->
+      <nav v-if="selectedCampaignId" aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><router-link to="/influencer/dashboard">Dashboard</router-link></li>
+          <li class="breadcrumb-item"><router-link to="/influencer/campaigns/browse">Browse Campaigns</router-link></li>
+          <li class="breadcrumb-item active">Campaign Details</li>
+        </ol>
+      </nav>
       
       <!-- Error Alert -->
       <div v-if="error" class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
@@ -272,8 +305,8 @@ onMounted(() => {
         <button type="button" class="btn-close" @click="successMessage = ''"></button>
       </div>
       
-      <!-- Filters -->
-      <div class="card border-0 shadow-sm mb-4">
+      <!-- Filters (only show when not viewing a specific campaign) -->
+      <div v-if="!selectedCampaignId" class="card border-0 shadow-sm mb-4">
         <div class="card-body">
           <h5 class="card-title mb-3">Find Campaigns</h5>
           <div class="row g-3">
@@ -423,95 +456,96 @@ onMounted(() => {
       </div>
       
       <!-- Apply Modal - Using Bootstrap's modal classes -->
-      <div v-if="showApplyModal" class="modal show d-block" tabindex="-1" role="dialog">
-        <div class="modal-backdrop fade show" @click="closeApplyModal"></div>
-        <div class="modal-dialog modal-dialog-centered" role="document">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">Apply for Campaign</h5>
-              <button type="button" class="btn-close" @click="closeApplyModal" aria-label="Close"></button>
-            </div>
-            
-            <div class="modal-body">
-              <div v-if="selectedCampaign" class="mb-4">
-                <h4 class="text-dark">{{ selectedCampaign.name }}</h4>
-                
-                <div class="campaign-details mb-3 p-3 border rounded">
-                  <div class="row g-3">
-                    <div class="col-6">
-                      <label class="text-muted d-block mb-1 fw-bold">Budget</label>
-                      <div class="fs-5 fw-bold text-primary">{{ formatCurrency(selectedCampaign.budget) }}</div>
-                    </div>
-                    <div class="col-6">
-                      <label class="text-muted d-block mb-1 fw-bold">Category</label>
-                      <div class="fw-medium">{{ categories.find(c => c.id === selectedCampaign.category)?.name || 'Uncategorized' }}</div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="bg-light p-3 rounded mb-4 border">
-                  <h6 class="mb-2 fw-bold">Description</h6>
-                  <p class="mb-0 whitespace-pre-wrap text-dark">{{ selectedCampaign.description || 'No description provided.' }}</p>
-                </div>
-                
-                <div class="bg-light p-3 rounded border">
-                  <h6 class="mb-2 fw-bold">Requirements</h6>
-                  <p class="mb-0 whitespace-pre-wrap text-dark">{{ selectedCampaign.requirements || 'No specific requirements provided.' }}</p>
-                </div>
+      <div v-if="showApplyModal" class="modal-overlay" @click.self="closeApplyModal">
+        <div class="modal show d-block" tabindex="-1" role="dialog">
+          <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Apply for Campaign</h5>
+                <button type="button" class="btn-close" @click="closeApplyModal" aria-label="Close"></button>
               </div>
               
-              <hr class="my-4" />
-              
-              <form @submit.prevent="submitApplication" class="bg-white p-3 rounded border">
-                <h5 class="mb-3">Your Application</h5>
-                <!-- Proposed Amount -->
-                <div class="mb-3">
-                  <label for="proposedAmount" class="form-label fw-bold">Your Proposed Amount</label>
-                  <div class="input-group">
-                    <span class="input-group-text">$</span>
-                    <input 
-                      type="number" 
-                      id="proposedAmount" 
-                      class="form-control" 
-                      v-model="applicationForm.proposedAmount"
-                      min="1"
-                      placeholder="Enter your proposed payment amount"
-                      required
-                    >
+              <div class="modal-body">
+                <div v-if="selectedCampaign" class="mb-4">
+                  <h4 class="text-dark">{{ selectedCampaign.name }}</h4>
+                  
+                  <div class="campaign-details mb-3 p-3 border rounded">
+                    <div class="row g-3">
+                      <div class="col-6">
+                        <label class="text-muted d-block mb-1 fw-bold">Budget</label>
+                        <div class="fs-5 fw-bold text-primary">{{ formatCurrency(selectedCampaign.budget) }}</div>
+                      </div>
+                      <div class="col-6">
+                        <label class="text-muted d-block mb-1 fw-bold">Category</label>
+                        <div class="fw-medium">{{ categories.find(c => c.id === selectedCampaign.category)?.name || 'Uncategorized' }}</div>
+                      </div>
+                    </div>
                   </div>
-                  <div v-if="formErrors.proposedAmount" class="text-danger small mt-1">{{ formErrors.proposedAmount }}</div>
-                  <small class="form-text text-muted">This amount can be negotiated later.</small>
+                  
+                  <div class="bg-light p-3 rounded mb-4 border">
+                    <h6 class="mb-2 fw-bold">Description</h6>
+                    <p class="mb-0 whitespace-pre-wrap text-dark">{{ selectedCampaign.description || 'No description provided.' }}</p>
+                  </div>
+                  
+                  <div class="bg-light p-3 rounded border">
+                    <h6 class="mb-2 fw-bold">Requirements</h6>
+                    <p class="mb-0 whitespace-pre-wrap text-dark">{{ selectedCampaign.requirements || 'No specific requirements provided.' }}</p>
+                  </div>
                 </div>
                 
-                <!-- Message -->
-                <div class="mb-3">
-                  <label for="message" class="form-label fw-bold">Message to Sponsor</label>
-                  <textarea 
-                    id="message" 
-                    class="form-control" 
-                    v-model="applicationForm.message"
-                    rows="4"
-                    placeholder="Explain why you're a good fit for this campaign..."
-                    required
-                  ></textarea>
-                  <div v-if="formErrors.message" class="text-danger small mt-1">{{ formErrors.message }}</div>
-                </div>
-              </form>
-            </div>
-            
-            <div class="modal-footer">
-              <button type="button" class="btn btn-outline-secondary" @click="closeApplyModal">
-                Cancel
-              </button>
-              <button 
-                type="button" 
-                class="btn btn-primary" 
-                @click="submitApplication"
-                :disabled="applyLoading"
-              >
-                <span v-if="applyLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                Submit Application
-              </button>
+                <hr class="my-4" />
+                
+                <form @submit.prevent="submitApplication" class="bg-white p-3 rounded border">
+                  <h5 class="mb-3">Your Application</h5>
+                  <!-- Proposed Amount -->
+                  <div class="mb-3">
+                    <label for="proposedAmount" class="form-label fw-bold">Your Proposed Amount</label>
+                    <div class="input-group">
+                      <span class="input-group-text">$</span>
+                      <input 
+                        type="number" 
+                        id="proposedAmount" 
+                        class="form-control" 
+                        v-model="applicationForm.proposedAmount"
+                        min="1"
+                        placeholder="Enter your proposed payment amount"
+                        required
+                      >
+                    </div>
+                    <div v-if="formErrors.proposedAmount" class="text-danger small mt-1">{{ formErrors.proposedAmount }}</div>
+                    <small class="form-text text-muted">This amount can be negotiated later.</small>
+                  </div>
+                  
+                  <!-- Message -->
+                  <div class="mb-3">
+                    <label for="message" class="form-label fw-bold">Message to Sponsor</label>
+                    <textarea 
+                      id="message" 
+                      class="form-control" 
+                      v-model="applicationForm.message"
+                      rows="4"
+                      placeholder="Explain why you're a good fit for this campaign..."
+                      required
+                    ></textarea>
+                    <div v-if="formErrors.message" class="text-danger small mt-1">{{ formErrors.message }}</div>
+                  </div>
+                </form>
+              </div>
+              
+              <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" @click="closeApplyModal">
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  class="btn btn-primary" 
+                  @click="submitApplication"
+                  :disabled="applyLoading"
+                >
+                  <span v-if="applyLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                  Submit Application
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -572,9 +606,149 @@ onMounted(() => {
 /* For Bootstrap modal in Vue */
 .modal-backdrop {
   opacity: 0.5;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1040;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1050;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.modal-dialog {
+  margin: 1.75rem auto;
+  max-width: 600px;
+}
+
+.modal-content {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 8px;
+  animation: modalFadeIn 0.3s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .whitespace-pre-wrap {
   white-space: pre-wrap;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1040;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+</style> 
+  background-repeat: no-repeat;
+  position: relative;
+  border-top-left-radius: 0.375rem;
+  border-top-right-radius: 0.375rem;
+}
+
+.campaign-card-category {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.campaign-description {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  max-height: 4.5rem; /* Approx 3 lines */
+}
+
+/* For Bootstrap modal in Vue */
+.modal-backdrop {
+  opacity: 0.5;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1040;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1050;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.modal-dialog {
+  margin: 1.75rem auto;
+  max-width: 600px;
+}
+
+.modal-content {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 8px;
+  animation: modalFadeIn 0.3s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.whitespace-pre-wrap {
+  white-space: pre-wrap;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1040;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style> 

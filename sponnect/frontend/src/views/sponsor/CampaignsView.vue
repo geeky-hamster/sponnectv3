@@ -115,14 +115,19 @@ onMounted(() => {
       <!-- Filters and action buttons -->
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
+          <h5 class="card-title mb-3">
+            <i class="bi bi-funnel me-2"></i>Search Campaigns
+          </h5>
           <div class="row g-3">
             <div class="col-md-6">
+              <label for="campaignSearch" class="form-label">Search</label>
               <div class="input-group">
                 <span class="input-group-text bg-light border-end-0">
                   <i class="bi bi-search"></i>
                 </span>
                 <input 
                   type="text" 
+                  id="campaignSearch"
                   v-model="searchQuery" 
                   class="form-control border-start-0" 
                   placeholder="Search campaigns..."
@@ -130,14 +135,15 @@ onMounted(() => {
               </div>
             </div>
             <div class="col-md-3">
-              <select v-model="statusFilter" class="form-select">
+              <label for="visibilityFilter" class="form-label">Visibility</label>
+              <select id="visibilityFilter" v-model="statusFilter" class="form-select">
                 <option value="all">All Visibility</option>
                 <option value="public">Public</option>
                 <option value="private">Private</option>
               </select>
             </div>
-            <div class="col-md-3 text-end">
-              <RouterLink to="/sponsor/campaigns/create" class="btn btn-primary">
+            <div class="col-md-3 d-flex align-items-end">
+              <RouterLink to="/sponsor/campaigns/create" class="btn btn-primary w-100">
                 <i class="bi bi-plus-circle me-1"></i>New Campaign
               </RouterLink>
             </div>
@@ -177,58 +183,63 @@ onMounted(() => {
       </div>
       
       <!-- Campaigns list -->
-      <div v-else class="row row-cols-1 row-cols-md-2 g-4">
-        <div v-for="campaign in filteredCampaigns" :key="campaign.id" class="col">
-          <div class="card h-100 border-0 shadow-sm">
-            <div class="card-body">
-              <div class="d-flex justify-content-between mb-3">
-                <h5 class="card-title mb-0">{{ campaign.name }}</h5>
-                <span 
-                  :class="{
-                    'badge rounded-pill bg-success': campaign.visibility === 'public',
-                    'badge rounded-pill bg-secondary': campaign.visibility === 'private'
-                  }"
-                >
-                  {{ campaign.visibility }}
-                </span>
-              </div>
-              
-              <p class="card-text text-muted">
-                {{ campaign.description ? 
-                  (campaign.description.length > 100 ? 
-                    campaign.description.substring(0, 100) + '...' : 
-                    campaign.description) : 
-                  'No description provided.' }}
-              </p>
-              
-              <div class="row g-2 mb-3">
-                <div class="col-6">
-                  <div class="d-flex align-items-center">
-                    <i class="bi bi-cash-stack text-success me-2"></i>
-                    <span>{{ formatCurrency(campaign.budget) }}</span>
+      <div v-else>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0">Your Campaigns <span class="text-muted fs-6">({{ filteredCampaigns.length }} of {{ campaigns.length }} campaigns)</span></h5>
+        </div>
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+          <div v-for="campaign in filteredCampaigns" :key="campaign.id" class="col">
+            <div class="card h-100 border-0 shadow-sm">
+              <div class="card-body">
+                <div class="d-flex justify-content-between mb-3">
+                  <h5 class="card-title mb-0">{{ campaign.name }}</h5>
+                  <span 
+                    :class="{
+                      'badge rounded-pill bg-success': campaign.visibility === 'public',
+                      'badge rounded-pill bg-secondary': campaign.visibility === 'private'
+                    }"
+                  >
+                    {{ campaign.visibility }}
+                  </span>
+                </div>
+                
+                <p class="card-text text-muted">
+                  {{ campaign.description ? 
+                    (campaign.description.length > 100 ? 
+                      campaign.description.substring(0, 100) + '...' : 
+                      campaign.description) : 
+                    'No description provided.' }}
+                </p>
+                
+                <div class="row g-2 mb-3">
+                  <div class="col-6">
+                    <div class="d-flex align-items-center">
+                      <i class="bi bi-cash-stack text-success me-2"></i>
+                      <span>{{ formatCurrency(campaign.budget) }}</span>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="d-flex align-items-center">
+                      <i class="bi bi-calendar-event text-primary me-2"></i>
+                      <span>{{ formatDate(campaign.start_date) }}</span>
+                    </div>
                   </div>
                 </div>
-                <div class="col-6">
-                  <div class="d-flex align-items-center">
-                    <i class="bi bi-calendar-event text-primary me-2"></i>
-                    <span>{{ formatDate(campaign.start_date) }}</span>
-                  </div>
-                </div>
               </div>
-            </div>
-            <div class="card-footer bg-white border-0 pt-0 pb-3">
-              <div class="d-flex justify-content-between">
-                <div>
-                  <RouterLink :to="`/sponsor/campaigns/${campaign.id}`" class="btn btn-sm btn-outline-primary me-2">
-                    <i class="bi bi-eye me-1"></i>View
-                  </RouterLink>
-                  <RouterLink :to="`/sponsor/campaigns/${campaign.id}/edit`" class="btn btn-sm btn-outline-secondary me-2">
-                    <i class="bi bi-pencil me-1"></i>Edit
-                  </RouterLink>
+              <div class="card-footer bg-white border-0 pt-0 pb-3">
+                <div class="d-flex justify-content-between">
+                  <div>
+                    <RouterLink :to="`/sponsor/campaigns/${campaign.id}`" class="btn btn-sm btn-outline-primary me-2">
+                      <i class="bi bi-eye me-1"></i>View
+                    </RouterLink>
+                    <RouterLink :to="`/sponsor/campaigns/${campaign.id}/edit`" class="btn btn-sm btn-outline-secondary me-2">
+                      <i class="bi bi-pencil me-1"></i>Edit
+                    </RouterLink>
+                  </div>
+                  <button @click="deleteCampaign(campaign.id)" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash me-1"></i>Delete
+                  </button>
                 </div>
-                <button @click="deleteCampaign(campaign.id)" class="btn btn-sm btn-outline-danger">
-                  <i class="bi bi-trash me-1"></i>Delete
-                </button>
               </div>
             </div>
           </div>
@@ -237,6 +248,17 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.campaigns-view {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+</style> 
 
 <style scoped>
 .campaigns-view {

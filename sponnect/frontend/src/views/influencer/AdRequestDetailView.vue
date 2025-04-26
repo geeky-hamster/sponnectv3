@@ -13,6 +13,7 @@ const submitLoading = ref(false)
 const adRequest = ref(null)
 const error = ref('')
 const successMessage = ref('')
+const negotiationHistory = ref([])
 
 // Negotiation form
 const form = reactive({
@@ -79,6 +80,15 @@ const loadAdRequest = async () => {
       // Pre-fill counter offer with current amount
       if (foundRequest.payment_amount) {
         form.counterOffer = foundRequest.payment_amount
+      }
+      
+      // Load negotiation history if available
+      try {
+        const historyResponse = await influencerService.getNegotiationHistory(requestId)
+        negotiationHistory.value = historyResponse.data.history || []
+      } catch (historyErr) {
+        console.error('Failed to load negotiation history:', historyErr)
+        // Don't set error since the main request succeeded
       }
     } else {
       console.error('Ad request not found in response data')
@@ -354,6 +364,16 @@ const enhancedLoadAdRequest = async () => {
 onMounted(() => {
   enhancedLoadAdRequest()
 })
+
+// Computed property to determine if influencer can respond
+const canRespond = computed(() => {
+  if (!adRequest.value) return false
+  
+  // Can respond if status is Pending (initial response) 
+  // or if status is Negotiating and last offer was made by sponsor
+  return (adRequest.value.status === 'Pending') || 
+         (adRequest.value.status === 'Negotiating' && adRequest.value.last_offer_by === 'sponsor')
+})
 </script>
 
 <template>
@@ -515,8 +535,159 @@ onMounted(() => {
             
             <!-- Negotiations Tab Content -->
             <div v-if="activeTab === 'negotiations'" class="card border-0 shadow-sm mb-4">
-              <!-- Existing negotiation content -->
-              <!-- ... existing code ... -->
+              <div class="card-body">
+                <h5 class="card-title border-bottom pb-2 mb-3">Negotiation History</h5>
+                
+                <!-- Action Required Alert - When influencer needs to respond -->
+                <div v-if="canRespond" class="alert alert-info mb-4">
+                  <div class="d-flex justify-content-between mb-2">
+                    <h6 class="alert-heading font-weight-bold mb-0">Respond to Offer</h6>
+                    <span class="badge bg-warning">Action Required</span>
+                  </div>
+                  
+                  <p>The sponsor has offered <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong> for this collaboration.</p>
+                  <p v-if="adRequest.message" class="mt-2">
+                    <strong>Message from Sponsor:</strong> {{ adRequest.message }}
+                  </p>
+                  
+                  <hr>
+                  
+                  <div class="mt-3">
+                    <div class="mb-3">
+                      <div class="mb-2"><strong>How would you like to respond?</strong></div>
+                      <div class="form-group mb-3">
+                        <div v-for="action in actions" :key="action.value" class="form-check mb-2">
+                          <input 
+                            class="form-check-input" 
+                            type="radio" 
+                            :id="`action-${action.value}`" 
+                            name="action"
+                            :value="action.value"
+                            v-model="form.action"
+                            :disabled="disabledActions.includes(action.value)"
+                          >
+                          <label class="form-check-label d-flex align-items-center" :for="`action-${action.value}`">
+                            <span class="fw-bold me-2">{{ action.label }}</span>
+                            <span class="text-muted small">{{ action.description }}</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div v-if="formErrors.action" class="text-danger small mb-3">{{ formErrors.action }}</div>
+                    </div>
+                    
+                    <div v-if="form.action === 'negotiate'" class="form-group mb-3 shadow-sm p-3 border rounded bg-light">
+                      <label for="counterOffer" class="form-label">Your Counter Offer (USD)</label>
+                      <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input 
+                          type="number" 
+                          id="counterOffer" 
+                          class="form-control" 
+                          v-model="form.counterOffer"
+                          placeholder="Enter your counter offer amount"
+                          min="1"
+                        />
+                      </div>
+                      <div v-if="formErrors.counterOffer" class="text-danger small mt-1">{{ formErrors.counterOffer }}</div>
+                      <small class="form-text text-muted">Current offer: {{ formatCurrency(adRequest.payment_amount) }}</small>
+                    </div>
+                    
+                    <div v-if="form.action === 'negotiate' || form.action === 'reject'" class="form-group mb-3">
+                      <label for="message" class="form-label">
+                        {{ form.action === 'negotiate' ? 'Explain your counter offer' : 'Reason for rejection' }} (Required)
+                      </label>
+                      <textarea 
+                        id="message" 
+                        class="form-control" 
+                        v-model="form.message"
+                        rows="3"
+                        :placeholder="form.action === 'negotiate' ? 'Explain why you are proposing this amount' : 'Explain why you are rejecting this offer'"
+                      ></textarea>
+                      <div v-if="formErrors.message" class="text-danger small mt-1">{{ formErrors.message }}</div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end">
+                      <button 
+                        type="button" 
+                        class="btn btn-primary" 
+                        @click="handleSubmit"
+                        :disabled="submitLoading"
+                      >
+                        <span v-if="submitLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <i v-else class="bi bi-send me-1"></i>
+                        Send Response
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Current Status Alert when no action needed -->
+                <div v-else-if="adRequest" class="alert mb-4" :class="{
+                  'alert-success': adRequest.status === 'Accepted',
+                  'alert-danger': adRequest.status === 'Rejected',
+                  'alert-warning': adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'influencer',
+                  'alert-info': adRequest.status === 'Pending'
+                }">
+                  <div class="d-flex justify-content-between">
+                    <h6 class="alert-heading font-weight-bold mb-1">Status: {{ adRequest.status }}</h6>
+                    <span v-if="adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'influencer'" class="badge bg-warning">Waiting for sponsor</span>
+                  </div>
+                  <p class="mb-0" v-if="adRequest.status === 'Accepted'">
+                    <i class="bi bi-check-circle me-1"></i> You have accepted the offer of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong>. The collaboration is now active.
+                  </p>
+                  <p class="mb-0" v-else-if="adRequest.status === 'Rejected'">
+                    <i class="bi bi-x-circle me-1"></i> This offer has been rejected and the negotiation is closed.
+                  </p>
+                  <p class="mb-0" v-else-if="adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'influencer'">
+                    <i class="bi bi-hourglass me-1"></i> You made a counter offer of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong>. Waiting for the sponsor to respond.
+                  </p>
+                  <p class="mb-0" v-else-if="adRequest.status === 'Pending'">
+                    <i class="bi bi-clock me-1"></i> This request is pending your initial response.
+                  </p>
+                </div>
+                
+                <!-- Negotiation History Timeline -->
+                <div v-if="negotiationHistory && negotiationHistory.length > 0" class="timeline mt-4">
+                  <h6 class="mb-3">Negotiation Timeline</h6>
+                  
+                  <div v-for="(item, index) in negotiationHistory" :key="index" class="timeline-item mb-4">
+                    <div class="d-flex">
+                      <div :class="[
+                        'timeline-badge me-3',
+                        item.user_role === 'influencer' ? 'bg-primary' : 'bg-success'
+                      ]">
+                        <i :class="[
+                          'bi',
+                          item.action === 'propose' ? 'bi-chat-left-text' :
+                          item.action === 'negotiate' ? 'bi-arrow-left-right' :
+                          item.action === 'accept' ? 'bi-check-lg' : 'bi-x-lg'
+                        ]"></i>
+                      </div>
+                      <div class="timeline-content border p-3 rounded flex-grow-1">
+                        <div class="d-flex justify-content-between mb-2">
+                          <h6 class="mb-0">
+                            {{ item.user_role === 'influencer' ? 'You' : 'Sponsor' }}
+                            {{ item.action === 'propose' ? 'proposed' :
+                               item.action === 'negotiate' ? 'counter-offered' :
+                               item.action === 'accept' ? 'accepted' : 'rejected' }}
+                          </h6>
+                          <small class="text-muted">{{ formatDate(item.created_at) }}</small>
+                        </div>
+                        <div class="mb-2 fw-bold">
+                          Amount: {{ formatCurrency(item.payment_amount) }}
+                        </div>
+                        <div v-if="item.message" class="text-muted">
+                          "{{ item.message }}"
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div v-else class="text-center py-3">
+                  <p class="text-muted mb-0">No negotiation history available yet.</p>
+                </div>
+              </div>
             </div>
             
             <!-- Progress Updates Tab Content -->
@@ -875,5 +1046,29 @@ onMounted(() => {
 
 .nav-tabs .nav-link:hover:not(.active) {
   color: #343a40;
+}
+
+.timeline {
+  position: relative;
+  padding: 0;
+}
+
+.timeline-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.timeline-content {
+  background-color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.whitespace-pre-wrap {
+  white-space: pre-wrap;
 }
 </style> 

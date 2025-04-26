@@ -223,7 +223,6 @@ def register():
     if User.query.filter_by(email=email).first():  # Check for existing email
         return jsonify({"message": "Email already exists"}), 409
 
-
     if role not in ['influencer', 'sponsor']:
         return jsonify({"message": "Invalid role"}), 400
 
@@ -241,7 +240,8 @@ def register():
         user.category = data.get('category')
         user.niche = data.get('niche')
         user.reach = data.get('reach')
-        message = "Influencer registered successfully."
+        user.influencer_approved = False  # Requires approval
+        message = "Influencer registered. Account requires admin approval."
 
     db.session.add(user)
     db.session.commit()
@@ -264,17 +264,17 @@ def login():
     else:
         return jsonify({"message": "Username or email is required"}), 400 # More specific
 
-
-
     if not user or not user.check_password(password):
         return jsonify({"message": "Invalid credentials"}), 401
 
-    # ... (rest of the login logic remains the same)
     if not user.is_active:
         return jsonify({"message": "Account deactivated"}), 403
-    # Check sponsor approval status only if user is a sponsor
+        
+    # Check approval status based on role
     if user.role == 'sponsor' and not user.sponsor_approved:
         return jsonify({"message": "Sponsor account pending approval"}), 403
+    elif user.role == 'influencer' and not user.influencer_approved:
+        return jsonify({"message": "Influencer account pending approval"}), 403
 
     access_token = create_access_token(identity=user.id, additional_claims={'role': user.role})
     return jsonify(access_token=access_token, user_role=user.role), 200
@@ -331,7 +331,8 @@ def get_admin_stats():
     total_users = db.session.query(func.count(User.id)).scalar()
     active_sponsors = User.query.filter_by(role='sponsor', is_active=True, sponsor_approved=True).count()
     pending_sponsors = User.query.filter_by(role='sponsor', sponsor_approved=False).count()
-    active_influencers = User.query.filter_by(role='influencer', is_active=True).count()
+    active_influencers = User.query.filter_by(role='influencer', is_active=True, influencer_approved=True).count()
+    pending_influencers = User.query.filter_by(role='influencer', influencer_approved=False).count()
     public_campaigns = Campaign.query.filter_by(visibility='public').count()
     private_campaigns = Campaign.query.filter_by(visibility='private').count()
     flagged_users = User.query.filter_by(is_flagged=True).count()
@@ -351,9 +352,15 @@ def get_admin_stats():
     ).scalar() or 0
 
     return jsonify({
-        'total_users': total_users, 'active_sponsors': active_sponsors, 'pending_sponsors': pending_sponsors,
-        'active_influencers': active_influencers, 'public_campaigns': public_campaigns, 'private_campaigns': private_campaigns,
-        'flagged_users': flagged_users, 'flagged_campaigns': flagged_campaigns,
+        'total_users': total_users, 
+        'active_sponsors': active_sponsors, 
+        'pending_sponsors': pending_sponsors,
+        'active_influencers': active_influencers, 
+        'pending_influencers': pending_influencers,
+        'public_campaigns': public_campaigns, 
+        'private_campaigns': private_campaigns,
+        'flagged_users': flagged_users, 
+        'flagged_campaigns': flagged_campaigns,
         'ad_requests_by_status': dict(ad_request_stats),
         'payment_stats': {
             'total_payments': round(total_payments, 2),
@@ -370,6 +377,24 @@ def admin_get_pending_sponsors():
     pending = User.query.filter_by(role='sponsor', sponsor_approved=False, is_active=True).all()
     return jsonify([serialize_user_profile(user) for user in pending]), 200
 
+@app.route('/api/admin/pending_influencers', methods=['GET'])
+@jwt_required()
+@admin_required
+def admin_get_pending_influencers():
+    pending = User.query.filter_by(role='influencer', influencer_approved=False, is_active=True).all()
+    return jsonify([serialize_user_profile(user) for user in pending]), 200
+
+@app.route('/api/admin/pending_users', methods=['GET'])
+@jwt_required()
+@admin_required
+def admin_get_pending_users():
+    """Get all pending users (both sponsors and influencers)"""
+    pending_sponsors = User.query.filter_by(role='sponsor', sponsor_approved=False, is_active=True).all()
+    pending_influencers = User.query.filter_by(role='influencer', influencer_approved=False, is_active=True).all()
+    
+    all_pending = pending_sponsors + pending_influencers
+    return jsonify([serialize_user_profile(user) for user in all_pending]), 200
+
 @app.route('/api/admin/sponsors/<int:sponsor_id>/approve', methods=['PATCH'])
 @jwt_required()
 @admin_required
@@ -382,6 +407,18 @@ def admin_approve_sponsor(sponsor_id):
     db.session.commit()
     return jsonify({"message": "Sponsor approved"}), 200
 
+@app.route('/api/admin/influencers/<int:influencer_id>/approve', methods=['PATCH'])
+@jwt_required()
+@admin_required
+def admin_approve_influencer(influencer_id):
+    influencer = db.session.get(User, influencer_id)
+    if not influencer or influencer.role != 'influencer': return jsonify({"message": "Influencer not found"}), 404
+    if influencer.influencer_approved is True: return jsonify({"message": "Influencer already approved"}), 400
+    influencer.influencer_approved = True
+    influencer.is_active = True # Ensure active on approval
+    db.session.commit()
+    return jsonify({"message": "Influencer approved"}), 200
+
 @app.route('/api/admin/sponsors/<int:sponsor_id>/reject', methods=['PATCH'])
 @jwt_required()
 @admin_required
@@ -393,6 +430,18 @@ def admin_reject_sponsor(sponsor_id):
     sponsor.sponsor_approved = None # Reset approval status, maybe? Or keep False. Keep False.
     db.session.commit()
     return jsonify({"message": "Sponsor rejected and deactivated"}), 200
+
+@app.route('/api/admin/influencers/<int:influencer_id>/reject', methods=['PATCH'])
+@jwt_required()
+@admin_required
+def admin_reject_influencer(influencer_id):
+    influencer = db.session.get(User, influencer_id)
+    if not influencer or influencer.role != 'influencer': return jsonify({"message": "Influencer not found"}), 404
+    if influencer.influencer_approved is not False: return jsonify({"message": "Can only reject pending influencers"}), 400
+    influencer.is_active = False # Deactivate rejected influencers
+    influencer.influencer_approved = None # Reset approval status
+    db.session.commit()
+    return jsonify({"message": "Influencer rejected and deactivated"}), 200
 
 @app.route('/api/admin/users/<int:user_id>/flag', methods=['PATCH'])
 @jwt_required()
@@ -716,8 +765,9 @@ def sponsor_negotiate_ad_request(ad_request_id):
     if not ad_request: return jsonify({"message": "Ad Request not found"}), 404
     if ad_request.campaign.sponsor_id != sponsor_id: return jsonify({"message": "Access denied"}), 403
 
-    # Allow sponsor action only if status is 'Negotiating' and last offer was by influencer
-    if ad_request.status != 'Negotiating' or ad_request.last_offer_by != 'influencer':
+    # Allow sponsor action if status is 'Pending' OR ('Negotiating' and last offer was by influencer)
+    if not ((ad_request.status == 'Pending') or 
+            (ad_request.status == 'Negotiating' and ad_request.last_offer_by == 'influencer')):
          return jsonify({"message": "Cannot modify request now or not sponsor's turn"}), 400
 
     data = request.get_json()
@@ -728,7 +778,7 @@ def sponsor_negotiate_ad_request(ad_request_id):
         ad_request_id=ad_request.id,
         user_id=sponsor_id,
         user_role='sponsor',
-        action=action,
+        action='respond' if ad_request.status == 'Pending' else action,
         message=data.get('message'),
         payment_amount=data.get('payment_amount', ad_request.payment_amount),
         requirements=data.get('requirements')
@@ -1687,30 +1737,50 @@ def influencer_get_progress_updates(ad_request_id):
 @influencer_required
 def influencer_add_progress_update(ad_request_id):
     influencer_id = get_jwt_identity()
-    ad_request = AdRequest.query.filter_by(id=ad_request_id, influencer_id=influencer_id).first()
-    if not ad_request: return jsonify({"message": "Ad Request not found/denied"}), 404
+    app.logger.info(f"Influencer {influencer_id} creating progress update for ad_request {ad_request_id}")
     
-    if ad_request.status != 'Accepted': return jsonify({"message": "Can only add progress updates for accepted requests"}), 400
-    
-    data = request.get_json()
-    
-    if not data.get('content'): return jsonify({"message": "Content is required"}), 400
-    
-    # Create new progress update
-    progress_update = ProgressUpdate(
-        ad_request_id=ad_request_id,
-        content=data.get('content'),
-        media_urls=','.join(data.get('media_urls', [])) if isinstance(data.get('media_urls'), list) else None,
-        metrics_data=data.get('metrics_data')
-    )
-    
-    db.session.add(progress_update)
-    db.session.commit()
-    
-    return jsonify({
-        "message": "Progress update added successfully",
-        "progress_update": serialize_progress_update(progress_update)
-    }), 201
+    try:
+        ad_request = AdRequest.query.filter_by(id=ad_request_id, influencer_id=influencer_id).first()
+        if not ad_request: 
+            app.logger.warning(f"Ad request not found for influencer {influencer_id}, ad_request {ad_request_id}")
+            return jsonify({"message": "Ad Request not found/denied"}), 404
+        
+        if ad_request.status != 'Accepted': 
+            app.logger.warning(f"Cannot add progress update - ad request status is {ad_request.status}, not Accepted")
+            return jsonify({"message": "Can only add progress updates for accepted requests"}), 400
+        
+        data = request.get_json()
+        app.logger.info(f"Progress update payload: {data}")
+        
+        if not data:
+            return jsonify({"message": "No data provided"}), 400
+            
+        if not data.get('content'): 
+            return jsonify({"message": "Content is required"}), 400
+        
+        # Create new progress update
+        progress_update = ProgressUpdate(
+            ad_request_id=ad_request_id,
+            content=data.get('content'),
+            media_urls=','.join(data.get('media_urls', [])) if isinstance(data.get('media_urls'), list) else None,
+            metrics_data=data.get('metrics_data'),
+            status='Pending'  # Explicitly set initial status
+        )
+        
+        db.session.add(progress_update)
+        db.session.commit()
+        
+        app.logger.info(f"Successfully created progress update {progress_update.id} for ad_request {ad_request_id}")
+        
+        return jsonify({
+            "message": "Progress update added successfully",
+            "progress_update": serialize_progress_update(progress_update)
+        }), 201
+        
+    except Exception as e:
+        app.logger.error(f"Error in influencer_add_progress_update: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
 # == Sponsor: Progress Updates ==
 @app.route('/api/sponsor/ad_requests/<int:ad_request_id>/progress', methods=['GET'])
@@ -1718,12 +1788,33 @@ def influencer_add_progress_update(ad_request_id):
 @sponsor_required
 def sponsor_get_progress_updates(ad_request_id):
     sponsor_id = get_jwt_identity()
-    # Verify ownership via campaign
-    ad_request = AdRequest.query.join(Campaign).filter(AdRequest.id == ad_request_id, Campaign.sponsor_id == sponsor_id).first()
-    if not ad_request: return jsonify({"message": "Ad Request not found/denied"}), 404
+    app.logger.info(f"Sponsor {sponsor_id} requesting progress updates for ad_request {ad_request_id}")
     
-    updates = ProgressUpdate.query.filter_by(ad_request_id=ad_request_id).order_by(ProgressUpdate.created_at.desc()).all()
-    return jsonify([serialize_progress_update(update) for update in updates]), 200
+    try:
+        # Verify ownership via campaign
+        ad_request = AdRequest.query.join(Campaign).filter(AdRequest.id == ad_request_id, Campaign.sponsor_id == sponsor_id).first()
+        
+        if not ad_request:
+            app.logger.warning(f"Access denied: Sponsor {sponsor_id} tried to access ad_request {ad_request_id}")
+            return jsonify({"message": "Ad Request not found/denied"}), 404
+        
+        # Log campaign details
+        app.logger.info(f"Found ad_request {ad_request_id} for campaign {ad_request.campaign_id}, sponsor verified")
+        
+        # Get all progress updates without filtering by status
+        updates = ProgressUpdate.query.filter_by(ad_request_id=ad_request_id).order_by(ProgressUpdate.created_at.desc()).all()
+        
+        app.logger.info(f"Found {len(updates)} progress updates for ad_request {ad_request_id}")
+        
+        # Log details of each update for debugging
+        for update in updates:
+            app.logger.info(f"Progress update {update.id}: status={update.status}, created_at={update.created_at}")
+        
+        return jsonify([serialize_progress_update(update) for update in updates]), 200
+    
+    except Exception as e:
+        app.logger.error(f"Error in sponsor_get_progress_updates: {str(e)}", exc_info=True)
+        return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
 @app.route('/api/sponsor/ad_requests/<int:ad_request_id>/progress/<int:update_id>', methods=['PATCH'])
 @jwt_required()

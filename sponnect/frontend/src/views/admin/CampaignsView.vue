@@ -247,7 +247,7 @@ const viewCampaignDetails = (campaign) => {
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
           <h5 class="card-title mb-3">
-            <i class="bi bi-funnel me-2"></i>Filters
+            <i class="bi bi-funnel me-2"></i>Search Campaigns
           </h5>
           
           <div class="row g-3">
@@ -342,7 +342,29 @@ const viewCampaignDetails = (campaign) => {
       </div>
       
       <!-- Campaign List -->
-      <div class="card border-0 shadow-sm">
+      <div class="card border-0 shadow-sm overflow-hidden">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+          <h5 class="mb-0">Campaign List <span class="text-muted fs-6">({{ campaigns.length }} of {{ pagination.total_items || 0 }} campaigns)</span></h5>
+          <div class="btn-group">
+            <button 
+              class="btn btn-outline-secondary btn-sm" 
+              @click="loadCampaigns(pagination.page - 1)"
+              :disabled="pagination.page === 1 || loading"
+            >
+              <i class="bi bi-chevron-left"></i>
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" disabled>
+              Page {{ pagination.page }} of {{ pagination.total_pages }}
+            </button>
+            <button 
+              class="btn btn-outline-secondary btn-sm" 
+              @click="loadCampaigns(pagination.page + 1)"
+              :disabled="pagination.page === pagination.total_pages || loading"
+            >
+              <i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
+        </div>
         <div class="card-body p-0">
           <div v-if="loading && !campaigns.length" class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
@@ -466,42 +488,6 @@ const viewCampaignDetails = (campaign) => {
                 </tr>
               </tbody>
             </table>
-          </div>
-          
-          <!-- Pagination -->
-          <div v-if="pagination.total_pages > 1" class="d-flex justify-content-center p-3 border-top">
-            <nav aria-label="Campaign pagination">
-              <ul class="pagination mb-0">
-                <li class="page-item" :class="{ disabled: !pagination.has_prev }">
-                  <button 
-                    class="page-link" 
-                    @click="loadCampaigns(pagination.prev_num)" 
-                    :disabled="!pagination.has_prev"
-                  >
-                    Previous
-                  </button>
-                </li>
-                
-                <li 
-                  v-for="page in pagination.total_pages" 
-                  :key="page" 
-                  class="page-item"
-                  :class="{ active: page === pagination.page }"
-                >
-                  <button class="page-link" @click="loadCampaigns(page)">{{ page }}</button>
-                </li>
-                
-                <li class="page-item" :class="{ disabled: !pagination.has_next }">
-                  <button 
-                    class="page-link" 
-                    @click="loadCampaigns(pagination.next_num)" 
-                    :disabled="!pagination.has_next"
-                  >
-                    Next
-                  </button>
-                </li>
-              </ul>
-            </nav>
           </div>
         </div>
       </div>

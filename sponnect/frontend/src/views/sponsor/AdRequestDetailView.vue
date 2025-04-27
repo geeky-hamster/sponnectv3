@@ -432,15 +432,15 @@ const initializePaymentForm = () => {
 // Enhanced loadAdRequest to also load progress updates and payments if relevant
 const enhancedLoadAdRequest = async () => {
   try {
-    await loadAdRequest()
-    
-    // If request is accepted, load additional data
-    if (adRequest.value && adRequest.value.status === 'Accepted') {
+  await loadAdRequest()
+  
+  // If request is accepted, load additional data
+  if (adRequest.value && adRequest.value.status === 'Accepted') {
       await Promise.all([
         loadProgressUpdates(),
         loadPayments()
       ])
-      initializePaymentForm()
+    initializePaymentForm()
     }
   } catch (err) {
     console.error('Error in enhanced load:', err)
@@ -1050,51 +1050,6 @@ const enhancedLoadAdRequest = async () => {
 
 .influencer-message {
   margin-right: auto;
-}
-
-.sponsor-message .message-content {
-  background-color: rgba(var(--bs-primary-rgb), 0.1);
-  border-top-right-radius: 0 !important;
-}
-
-.influencer-message .message-content {
-  background-color: rgba(var(--bs-info-rgb), 0.1);
-  border-top-left-radius: 0 !important;
-}
-
-/* Scrollbar styling */
-.chat-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.chat-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.chat-container::-webkit-scrollbar-thumb {
-  background: #ccc;
-  border-radius: 3px;
-}
-
-/* Tab navigation styles */
-.nav-tabs .nav-link {
-  color: #6c757d;
-}
-
-.nav-tabs .nav-link.active {
-  color: var(--bs-primary);
-  font-weight: 500;
-}
-
-.nav-tabs .nav-link:hover:not(.active) {
-  color: #343a40;
-}
-
-/* Modal styles */
-.modal {
-  background-color: rgba(0, 0, 0, 0.5);
-}
-</style> 
 }
 
 .sponsor-message .message-content {

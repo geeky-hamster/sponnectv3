@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Analytics Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #4361ee;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            padding: 20px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .section {
+            margin-bottom: 25px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 20px;
+        }
+        .section:last-child {
+            border-bottom: none;
+        }
+        .section-title {
+            color: #4361ee;
+            margin-bottom: 15px;
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-box {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+        .growth-positive {
+            color: #28a745;
+        }
+        .growth-negative {
+            color: #dc3545;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: #4361ee;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Monthly Analytics Report</h1>
+        <p>{{ report.date_range }}</p>
+    </div>
+    <div class="content">
+        <p>Hello {{ admin.username }},</p>
+        
+        <p>Here is your monthly analytics report for Sponnect platform. This report provides key insights into platform performance for {{ report.date_range }}.</p>
+        
+        <!-- User Statistics Section -->
+        <div class="section">
+            <h2 class="section-title">User Statistics</h2>
+            
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <div class="stat-value">{{ report.user_stats.total_users }}</div>
+                    <div class="stat-label">Total Users</div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-value">{{ report.user_stats.new_users_this_month }}</div>
+                    <div class="stat-label">New Users</div>
+                    <div class="stat-label {% if report.user_stats.user_growth_rate >= 0 %}growth-positive{% else %}growth-negative{% endif %}">
+                        {{ "+" if report.user_stats.user_growth_rate >= 0 else "" }}{{ "%.1f"|format(report.user_stats.user_growth_rate) }}% from last month
+                    </div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-value">{{ report.user_stats.sponsors_count }}</div>
+                    <div class="stat-label">Sponsors</div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-value">{{ report.user_stats.influencers_count }}</div>
+                    <div class="stat-label">Influencers</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Campaign Statistics Section -->
+        <div class="section">
+            <h2 class="section-title">Campaign Statistics</h2>
+            
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <div class="stat-value">{{ report.campaign_stats.total_campaigns }}</div>
+                    <div class="stat-label">Total Campaigns</div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-value">{{ report.campaign_stats.new_campaigns_this_month }}</div>
+                    <div class="stat-label">New Campaigns</div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-value">{{ report.campaign_stats.active_campaigns }}</div>
+                    <div class="stat-label">Active Campaigns</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Ad Request Statistics Section -->
+        <div class="section">
+            <h2 class="section-title">Ad Request Statistics</h2>
+            
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <div class="stat-value">{{ report.ad_request_stats.total_ad_requests }}</div>
+                    <div class="stat-label">Total Ad Requests</div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-value">{{ report.ad_request_stats.new_ad_requests_this_month }}</div>
+                    <div class="stat-label">New Ad Requests</div>
+                </div>
+            </div>
+            
+            <h3>Status Breakdown</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for status, count in report.ad_request_stats.by_status.items() %}
+                    <tr>
+                        <td>{{ status|capitalize }}</td>
+                        <td>{{ count }}</td>
+                        <td>{{ "%.1f"|format((count / report.ad_request_stats.total_ad_requests * 100) if report.ad_request_stats.total_ad_requests > 0 else 0) }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Financial Statistics Section -->
+        <div class="section">
+            <h2 class="section-title">Financial Statistics</h2>
+            
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <div class="stat-value">${{ "{:,.2f}"|format(report.payment_stats.total_payments) }}</div>
+                    <div class="stat-label">Total Payments</div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-value">${{ "{:,.2f}"|format(report.payment_stats.total_platform_fees) }}</div>
+                    <div class="stat-label">Total Platform Fees</div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-value">${{ "{:,.2f}"|format(report.payment_stats.payments_this_month) }}</div>
+                    <div class="stat-label">Payments This Month</div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-value">${{ "{:,.2f}"|format(report.payment_stats.fees_this_month) }}</div>
+                    <div class="stat-label">Fees This Month</div>
+                </div>
+            </div>
+        </div>
+        
+        <a href="https://sponnect.com/admin/dashboard" class="cta-button">View Full Dashboard</a>
+        
+        <p>Thank you for using Sponnect!</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated report generated on {{ report.generated_at }}</p>
+        <p>© 2023 Sponnect. All rights reserved.</p>
+    </div>
+</body>
+</html> 

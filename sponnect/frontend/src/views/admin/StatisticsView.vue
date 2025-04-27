@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import { adminService } from '../../services/api'
 import { Bar, Pie, Line } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PieController, ArcElement, PointElement, LineElement } from 'chart.js'
+import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters'
 
 // Register Chart.js components
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PieController, ArcElement, PointElement, LineElement)
@@ -334,15 +335,6 @@ const formatNumber = (num) => {
   return new Intl.NumberFormat().format(num || 0)
 }
 
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0
-  }).format(amount || 0)
-}
-
 // Format percentage
 const formatPercentage = (value) => {
   const numValue = Number(value) || 0
@@ -582,106 +574,6 @@ watch(timeRange, () => {
                 <p class="text-muted small mb-0">Distribution of ad requests by status</p>
               </div>
               <div class="card-body">
-                <div class="chart-container" style="min-height: 250px; height: 30vh;">
-                  <div v-if="adRequestStatusChartData.labels.length === 0" class="text-center text-muted py-5">
-                    <i class="bi bi-exclamation-circle fs-1"></i>
-                    <p>No ad request data available for the selected period</p>
-                  </div>
-                  <Pie
-                    v-else
-                    :data="adRequestStatusChartData"
-                    :options="getChartOptions('pie')"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Campaign Activity Chart -->
-          <div class="col-12 col-lg-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-header bg-white border-0 pt-3 pt-md-4 pb-3">
-                <h5 class="mb-0">Campaign Activity</h5>
-                <p class="text-muted small mb-0">New campaigns and ad requests over time</p>
-              </div>
-              <div class="card-body">
-                <div class="chart-container" style="min-height: 250px; height: 30vh;">
-                  <div v-if="campaignActivityChartData.labels.length === 0" class="text-center text-muted py-5">
-                    <i class="bi bi-exclamation-circle fs-1"></i>
-                    <p>No campaign activity data available</p>
-                  </div>
-                  <Bar
-                    v-else
-                    :data="campaignActivityChartData"
-                    :options="getChartOptions('bar')"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<style scoped>
-.icon-bg {
-  width: 50px;
-  height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-@media (min-width: 768px) {
-  .icon-bg {
-    width: 60px;
-    height: 60px;
-  }
-}
-
-.chart-container {
-  position: relative;
-  width: 100%;
-}
-
-.stat-card {
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.stat-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* Responsive adjustments for card values */
-.card-value {
-  font-size: 1.5rem;
-}
-
-@media (min-width: 576px) {
-  .card-value {
-    font-size: 1.75rem;
-  }
-}
-
-@media (min-width: 992px) {
-  .card-value {
-    font-size: 2rem;
-  }
-}
-
-/* Add animation for loading */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.admin-statistics {
-  animation: fadeIn 0.5s ease-in-out;
-}
-</style> 
                 <div class="chart-container" style="min-height: 250px; height: 30vh;">
                   <div v-if="adRequestStatusChartData.labels.length === 0" class="text-center text-muted py-5">
                     <i class="bi bi-exclamation-circle fs-1"></i>

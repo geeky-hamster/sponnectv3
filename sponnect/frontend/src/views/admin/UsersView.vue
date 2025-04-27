@@ -2,24 +2,19 @@
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { adminService } from '../../services/api'
 import debounce from 'lodash/debounce'
-import { Modal as bootstrap } from 'bootstrap'
-import { useRoute, useRouter } from 'vue-router'
-import { useToast } from 'vue-toastification'
-import ProfileIcon from '@/components/common/ProfileIcon.vue'
-import ButtonWithConfirmation from '@/components/common/ButtonWithConfirmation.vue'
-import ThemedButton from '@/components/common/ThemedButton.vue'
-import Modal from '@/components/common/Modal.vue'
+import * as bootstrap from 'bootstrap'
 
 const users = ref([])
 const filteredUsers = ref([])
 const loading = ref(true)
-const errorMessage = ref('')
+const error = ref('')
 const success = ref('')
-const totalUsers = ref(0)
 
 // For profile modal
 const selectedUser = ref(null)
 const showProfileModal = ref(false)
+const bootstrapModalInstance = ref(null)
+const modalElement = ref(null)
 
 // For actions
 const actionLoading = ref(false)
@@ -47,22 +42,38 @@ const statusOptions = [
   { value: 'flagged', label: 'Flagged' }
 ]
 
-const toast = useToast()
-const route = useRoute()
-const router = useRouter()
-
 const loadUsers = async () => {
   try {
     loading.value = true
-    errorMessage.value = ''
+    error.value = ''
     
     const response = await adminService.getUsers({})
+    console.log('Response from getUsers:', response.data)
     users.value = response.data.users || []
-    totalUsers.value = users.value.length
+    
+    // Ensure approval fields are correctly set
+    users.value = users.value.map(user => {
+      // Make sure sponsor_approved and influencer_approved are boolean values
+      if (user.role === 'sponsor') {
+        user.sponsor_approved = user.sponsor_approved === true
+      } else if (user.role === 'influencer') {
+        user.influencer_approved = user.influencer_approved === true
+      }
+      return user
+    })
+    
+    console.log('Processed user data:', users.value.map(user => ({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      sponsor_approved: user.sponsor_approved,
+      influencer_approved: user.influencer_approved
+    })))
+    
     applyFilters()
   } catch (err) {
     console.error('Error loading users:', err)
-    errorMessage.value = 'Failed to load users. Please try again.'
+    error.value = 'Failed to load users. Please try again.'
   } finally {
     loading.value = false
   }
@@ -70,6 +81,14 @@ const loadUsers = async () => {
 
 // Apply filters to users list
 const applyFilters = () => {
+  // Debug log - check users data
+  console.log('Applying filters to users:', users.value.map(user => ({
+    id: user.id,
+    role: user.role,
+    sponsor_approved: user.sponsor_approved,
+    influencer_approved: user.influencer_approved
+  })))
+  
   filteredUsers.value = users.value.filter(user => {
     // Search filter (case insensitive)
     const searchMatch = !filters.search || 
@@ -80,22 +99,31 @@ const applyFilters = () => {
     // Role filter
     const roleMatch = !filters.role || user.role === filters.role;
     
+    // Helper to check if user is approved
+    const isUserApproved = (user) => {
+      if (user.role === 'sponsor') {
+        return user.sponsor_approved === true; // Explicit check for true
+      } else if (user.role === 'influencer') {
+        return user.influencer_approved === true; // Explicit check for true
+      }
+      return true; // Admin is always approved
+    };
+    
     // Status filter
     let statusMatch = true;
     if (filters.status) {
       switch (filters.status) {
         case 'active':
-          statusMatch = user.is_active && 
-            ((user.role === 'sponsor' && user.is_approved) || 
-             (user.role === 'influencer' && user.is_approved) ||
-             (user.role === 'admin'));
+          statusMatch = user.is_active && isUserApproved(user);
           break;
         case 'inactive':
           statusMatch = !user.is_active;
           break;
         case 'pending':
-          statusMatch = (user.role === 'sponsor' && !user.is_approved) || 
-                        (user.role === 'influencer' && !user.is_approved);
+          statusMatch = user.is_active && (
+            (user.role === 'sponsor' && user.sponsor_approved === false) || 
+            (user.role === 'influencer' && user.influencer_approved === false)
+          );
           break;
         case 'flagged':
           statusMatch = user.is_flagged;
@@ -105,6 +133,9 @@ const applyFilters = () => {
     
     return searchMatch && roleMatch && statusMatch;
   });
+  
+  // Debug log - filtered results
+  console.log('Filtered users:', filteredUsers.value.length)
 }
 
 // Watch for filter changes and apply them
@@ -134,29 +165,53 @@ const isValidEmail = (email) => {
 
 // Show user profile in modal
 const viewUserProfile = (user) => {
+  // First set the user and enable the modal in the DOM
   selectedUser.value = user
   showProfileModal.value = true
   
-  // Update URL with user ID for sharing
-  const url = new URL(window.location.href)
-  url.searchParams.set('view', user.id)
-  window.history.pushState({ userId: user.id }, '', url)
-  
-  // Use Bootstrap's modal API to show the modal
+  // Need to wait for Vue to render the modal in the DOM
   setTimeout(() => {
-    const modal = new bootstrap(document.getElementById('userProfileModal'))
-    modal.show()
+    // Clean up any existing modal instances and backdrops first
+    cleanupModal(false) // false = don't toggle showProfileModal
+    
+    // Now the modal element should be available
+    if (modalElement.value) {
+      // Create new modal instance
+      bootstrapModalInstance.value = new bootstrap.Modal(modalElement.value)
+      bootstrapModalInstance.value.show()
+    }
   }, 50)
 }
 
-// Handle modal close to update URL
-const handleModalClose = () => {
-  showProfileModal.value = false
+// Close the modal and clean up properly
+const closeModal = () => {
+  if (bootstrapModalInstance.value) {
+    bootstrapModalInstance.value.hide()
+  }
+  cleanupModal()
+}
+
+// Function to clean up modal resources
+const cleanupModal = (toggleModal = true) => {
+  if (toggleModal) {
+    showProfileModal.value = false
+  }
   
-  // Remove user ID from URL
-  const url = new URL(window.location.href)
-  url.searchParams.delete('view')
-  window.history.pushState({}, '', url)
+  // Dispose the modal instance
+  if (bootstrapModalInstance.value) {
+    bootstrapModalInstance.value.dispose()
+    bootstrapModalInstance.value = null
+  }
+  
+  // Clean up manually in case bootstrap doesn't
+  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+    backdrop.remove()
+  })
+  
+  // Make sure body doesn't have modal classes
+  document.body.classList.remove('modal-open')
+  document.body.style.overflow = ''
+  document.body.style.paddingRight = ''
 }
 
 // Flag/unflag user
@@ -191,7 +246,7 @@ const toggleFlagUser = async (user) => {
     }, 3000)
   } catch (err) {
     console.error('Error toggling user flag status:', err)
-    errorMessage.value = 'Failed to update flag status. Please try again.'
+    error.value = 'Failed to update flag status. Please try again.'
   } finally {
     actionLoading.value = false
   }
@@ -201,8 +256,8 @@ const toggleFlagUser = async (user) => {
 const toggleApproveSponsor = async (user) => {
   try {
     // Only allow approving pending sponsors
-    if (user.is_approved) {
-      errorMessage.value = 'This sponsor is already approved';
+    if (user.sponsor_approved === true) {
+      error.value = 'This sponsor is already approved';
       return;
     }
     
@@ -213,7 +268,12 @@ const toggleApproveSponsor = async (user) => {
     // Update the user's approval status in the list
     const index = users.value.findIndex(u => u.id === user.id)
     if (index !== -1) {
-      users.value[index].is_approved = true
+      users.value[index].sponsor_approved = true
+    }
+    
+    // Update the selected user if viewing in modal
+    if (selectedUser.value && selectedUser.value.id === user.id) {
+      selectedUser.value.sponsor_approved = true
     }
     
     // Apply filters after update
@@ -225,7 +285,7 @@ const toggleApproveSponsor = async (user) => {
     }, 3000)
   } catch (err) {
     console.error('Error approving sponsor:', err)
-    errorMessage.value = 'Failed to update approval status. Please try again.'
+    error.value = 'Failed to update approval status. Please try again.'
   } finally {
     actionLoading.value = false
   }
@@ -235,8 +295,9 @@ const toggleApproveSponsor = async (user) => {
 const approveUser = async (user) => {
   try {
     // Only allow approving pending users
-    if (user.is_approved) {
-      errorMessage.value = `This ${user.role} is already approved`;
+    if ((user.role === 'sponsor' && user.sponsor_approved === true) ||
+        (user.role === 'influencer' && user.influencer_approved === true)) {
+      error.value = `This ${user.role} is already approved`;
       return;
     }
     
@@ -245,15 +306,29 @@ const approveUser = async (user) => {
     if (user.role === 'sponsor') {
       await adminService.approveSponsor(user.id)
       success.value = 'Sponsor approved successfully'
+      // Update the user's approval status in the list
+      const index = users.value.findIndex(u => u.id === user.id)
+      if (index !== -1) {
+        users.value[index].sponsor_approved = true
+      }
+      
+      // Update the selected user if viewing in modal
+      if (selectedUser.value && selectedUser.value.id === user.id) {
+        selectedUser.value.sponsor_approved = true
+      }
     } else if (user.role === 'influencer') {
       await adminService.approveInfluencer(user.id)
       success.value = 'Influencer approved successfully'
-    }
-    
-    // Update the user's approval status in the list
-    const index = users.value.findIndex(u => u.id === user.id)
-    if (index !== -1) {
-      users.value[index].is_approved = true
+      // Update the user's approval status in the list
+      const index = users.value.findIndex(u => u.id === user.id)
+      if (index !== -1) {
+        users.value[index].influencer_approved = true
+      }
+      
+      // Update the selected user if viewing in modal
+      if (selectedUser.value && selectedUser.value.id === user.id) {
+        selectedUser.value.influencer_approved = true
+      }
     }
     
     // Apply filters after update
@@ -265,7 +340,7 @@ const approveUser = async (user) => {
     }, 3000)
   } catch (err) {
     console.error(`Error approving ${user.role}:`, err)
-    errorMessage.value = 'Failed to update approval status. Please try again.'
+    error.value = 'Failed to update approval status. Please try again.'
   } finally {
     actionLoading.value = false
   }
@@ -274,8 +349,9 @@ const approveUser = async (user) => {
 // Reject user (works for both sponsors and influencers)
 const rejectUser = async (user) => {
   try {
-    if (user.is_approved) {
-      errorMessage.value = `Cannot reject an already approved ${user.role}`;
+    if ((user.role === 'sponsor' && user.sponsor_approved === true) ||
+        (user.role === 'influencer' && user.influencer_approved === true)) {
+      error.value = `Cannot reject an already approved ${user.role}`;
       return;
     }
     
@@ -287,6 +363,11 @@ const rejectUser = async (user) => {
     } else if (user.role === 'influencer') {
       await adminService.rejectInfluencer(user.id)
       success.value = 'Influencer rejected successfully'
+    }
+    
+    // Close the modal since we're removing the user from the list
+    if (selectedUser.value && selectedUser.value.id === user.id) {
+      closeModal()
     }
     
     // Remove the user from the list since they are now deactivated
@@ -304,7 +385,85 @@ const rejectUser = async (user) => {
     }, 3000)
   } catch (err) {
     console.error(`Error rejecting ${user.role}:`, err)
-    errorMessage.value = 'Failed to reject user. Please try again.'
+    error.value = 'Failed to reject user. Please try again.'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+// Activate user function
+const activateUser = async (user) => {
+  try {
+    if (user.is_active) {
+      error.value = 'User is already active';
+      return;
+    }
+    
+    actionLoading.value = true
+    
+    await adminService.activateUser(user.id)
+    success.value = 'User activated successfully'
+    
+    // Update the user's active status
+    const index = users.value.findIndex(u => u.id === user.id)
+    if (index !== -1) {
+      users.value[index].is_active = true
+      
+      // If we're in the modal, update the selectedUser too
+      if (selectedUser.value && selectedUser.value.id === user.id) {
+        selectedUser.value.is_active = true
+      }
+    }
+    
+    // Apply filters after update
+    applyFilters()
+    
+    // Auto-hide success message after 3 seconds
+    setTimeout(() => {
+      success.value = ''
+    }, 3000)
+  } catch (err) {
+    console.error('Error activating user:', err)
+    error.value = 'Failed to activate user. Please try again.'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+// Deactivate user function
+const deactivateUser = async (user) => {
+  try {
+    if (!user.is_active) {
+      error.value = 'User is already inactive';
+      return;
+    }
+    
+    actionLoading.value = true
+    
+    await adminService.deactivateUser(user.id)
+    success.value = 'User deactivated successfully'
+    
+    // Update the user's active status
+    const index = users.value.findIndex(u => u.id === user.id)
+    if (index !== -1) {
+      users.value[index].is_active = false
+      
+      // If we're in the modal, update the selectedUser too
+      if (selectedUser.value && selectedUser.value.id === user.id) {
+        selectedUser.value.is_active = false
+      }
+    }
+    
+    // Apply filters after update
+    applyFilters()
+    
+    // Auto-hide success message after 3 seconds
+    setTimeout(() => {
+      success.value = ''
+    }, 3000)
+  } catch (err) {
+    console.error('Error deactivating user:', err)
+    error.value = 'Failed to deactivate user. Please try again.'
   } finally {
     actionLoading.value = false
   }
@@ -321,29 +480,8 @@ const getRoleBadgeClass = (role) => {
 }
 
 // Load users when component mounts
-onMounted(async () => {
-  try {
-    loading.value = true
-    await loadUsers() // Wait for users to load
-    
-    // Check URL for user ID to display
-    const urlParams = new URLSearchParams(window.location.search)
-    const viewUserId = urlParams.get('view')
-    
-    if (viewUserId) {
-      // Find user in the loaded users
-      const userToView = users.value.find(u => u.id.toString() === viewUserId)
-      if (userToView) {
-        // Show user profile if found
-        setTimeout(() => viewUserProfile(userToView), 100)
-      }
-    }
-  } catch (error) {
-    console.error('Error loading component:', error)
-    errorMessage.value = 'Failed to load users. Please try again.'
-  } finally {
-    loading.value = false
-  }
+onMounted(() => {
+  loadUsers()
 })
 </script>
 
@@ -369,9 +507,9 @@ onMounted(async () => {
       </div>
       
       <!-- Error alert -->
-      <div v-if="errorMessage" class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-        {{ errorMessage }}
-        <button type="button" class="btn-close" @click="errorMessage = ''"></button>
+      <div v-if="error" class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+        {{ error }}
+        <button type="button" class="btn-close" @click="error = ''"></button>
       </div>
       
       <!-- Filters -->
@@ -488,28 +626,26 @@ onMounted(async () => {
                 </td>
                 <td>
                   <span :class="{
-                    'badge bg-success': user.is_active && ((user.role === 'sponsor' && user.is_approved) || (user.role === 'influencer' && user.is_approved) || user.role === 'admin'),
-                    'badge bg-warning': (user.role === 'sponsor' || user.role === 'influencer') && !user.is_approved,
+                    'badge bg-success': user.is_active && ((user.role === 'sponsor' && user.sponsor_approved === true) || 
+                               (user.role === 'influencer' && user.influencer_approved === true) || 
+                               user.role === 'admin'),
+                    'badge bg-warning': (user.role === 'sponsor' && user.sponsor_approved === false) || 
+                               (user.role === 'influencer' && user.influencer_approved === false),
                     'badge bg-secondary': !user.is_active
                   }">
                     {{ 
                       !user.is_active ? 'Inactive' : 
-                      ((user.role === 'sponsor' || user.role === 'influencer') && !user.is_approved) ? 'Pending Approval' : 
+                      ((user.role === 'sponsor' && user.sponsor_approved === false) || 
+                       (user.role === 'influencer' && user.influencer_approved === false)) ? 'Pending Approval' : 
                       'Active' 
                     }}
                   </span>
                 </td>
                 <td>{{ formatDate(user.created_at) }}</td>
-                <td>
-                  <div class="btn-group btn-group-sm">
-                    <button 
-                      class="btn btn-outline-primary" 
-                      title="View user details"
-                      @click="viewUserProfile(user)"
-                    >
-                      <i class="bi bi-eye me-1"></i> View
-                    </button>
-                  </div>
+                <td class="text-center">
+                  <button class="btn btn-primary btn-sm" @click="viewUserProfile(user)" title="View Profile">
+                    <i class="bi bi-eye-fill"></i> View
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -517,14 +653,16 @@ onMounted(async () => {
         </div>
       </div>
       
-      <!-- User Profile Modal -->
-      <div class="modal fade" id="userProfileModal" tabindex="-1" aria-labelledby="userProfileModalLabel" 
-           aria-hidden="true" data-bs-backdrop="static">
+      <!-- User Profile Modal - Using v-if with showProfileModal to completely remove from DOM when closed -->
+      <div ref="modalElement" class="modal fade" id="userProfileModal" tabindex="-1" aria-labelledby="userProfileModalLabel" 
+           v-if="showProfileModal">
         <div class="modal-dialog modal-lg">
           <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title" id="userProfileModalLabel">User Profile</h5>
-              <button type="button" class="btn-close" @click="handleModalClose" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header bg-light">
+              <h5 class="modal-title fw-bold" id="userProfileModalLabel">
+                <i class="bi bi-person-badge me-2"></i>User Profile
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" @click="closeModal"></button>
             </div>
             <div class="modal-body" v-if="selectedUser">
               <div class="row">
@@ -539,14 +677,29 @@ onMounted(async () => {
                   <span :class="`badge ${getRoleBadgeClass(selectedUser.role)} mb-2`">
                     {{ selectedUser.role }}
                   </span>
-                  <div v-if="selectedUser.is_flagged" class="badge bg-danger mb-2">
+                  <span class="d-block mt-2" :class="{
+                    'badge bg-success': selectedUser.is_active && ((selectedUser.role === 'sponsor' && selectedUser.sponsor_approved === true) || 
+                                       (selectedUser.role === 'influencer' && selectedUser.influencer_approved === true) || 
+                                       selectedUser.role === 'admin'),
+                    'badge bg-warning': (selectedUser.role === 'sponsor' && selectedUser.sponsor_approved === false) || 
+                                       (selectedUser.role === 'influencer' && selectedUser.influencer_approved === false),
+                    'badge bg-secondary': !selectedUser.is_active
+                  }">
+                    {{ 
+                      !selectedUser.is_active ? 'Inactive' : 
+                      ((selectedUser.role === 'sponsor' && selectedUser.sponsor_approved === false) || 
+                       (selectedUser.role === 'influencer' && selectedUser.influencer_approved === false)) ? 'Pending Approval' : 
+                      'Active' 
+                    }}
+                  </span>
+                  <div v-if="selectedUser.is_flagged" class="badge bg-danger mt-2">
                     <i class="bi bi-flag-fill me-1"></i> Flagged
                   </div>
-                  <p class="text-muted">Joined on {{ formatDate(selectedUser.created_at) }}</p>
+                  <p class="text-muted mt-3">Joined on {{ formatDate(selectedUser.created_at) }}</p>
                 </div>
                 <div class="col-md-8">
-                  <div class="mb-3">
-                    <h6 class="fw-bold">Account Information</h6>
+                  <div class="mb-4">
+                    <h6 class="fw-bold border-bottom pb-2">Account Information</h6>
                     <div class="table-responsive">
                       <table class="table">
                         <tbody>
@@ -569,22 +722,6 @@ onMounted(async () => {
                               </div>
                             </td>
                           </tr>
-                          <tr>
-                            <th scope="row">Status</th>
-                            <td>
-                              <span :class="{
-                                'badge bg-success': selectedUser.is_active && ((selectedUser.role === 'sponsor' && selectedUser.is_approved) || (selectedUser.role === 'influencer' && selectedUser.is_approved) || selectedUser.role === 'admin'),
-                                'badge bg-warning': (selectedUser.role === 'sponsor' || selectedUser.role === 'influencer') && !selectedUser.is_approved,
-                                'badge bg-secondary': !selectedUser.is_active
-                              }">
-                                {{ 
-                                  !selectedUser.is_active ? 'Inactive' : 
-                                  ((selectedUser.role === 'sponsor' || selectedUser.role === 'influencer') && !selectedUser.is_approved) ? 'Pending Approval' : 
-                                  'Active' 
-                                }}
-                              </span>
-                            </td>
-                          </tr>
                           <tr v-if="selectedUser.role === 'sponsor'">
                             <th scope="row">Company</th>
                             <td>{{ selectedUser.company_name || 'Not provided' }}</td>
@@ -594,7 +731,15 @@ onMounted(async () => {
                             <td>{{ selectedUser.industry || 'Not provided' }}</td>
                           </tr>
                           <tr v-if="selectedUser.role === 'influencer'">
-                            <th scope="row">Specialty</th>
+                            <th scope="row">Display Name</th>
+                            <td>{{ selectedUser.influencer_name || 'Not specified' }}</td>
+                          </tr>
+                          <tr v-if="selectedUser.role === 'influencer'">
+                            <th scope="row">Category</th>
+                            <td>{{ selectedUser.category || 'Not specified' }}</td>
+                          </tr>
+                          <tr v-if="selectedUser.role === 'influencer'">
+                            <th scope="row">Niche</th>
                             <td>{{ selectedUser.niche || 'Not specified' }}</td>
                           </tr>
                           <tr v-if="selectedUser.role === 'influencer'">
@@ -607,179 +752,71 @@ onMounted(async () => {
                   </div>
                   
                   <div>
-                    <h6 class="fw-bold">Quick Actions</h6>
+                    <h6 class="fw-bold border-bottom pb-2">Actions</h6>
                     <div class="d-flex gap-2 flex-wrap">
-                      <!-- Show approve/reject buttons for pending users -->
-                      <div v-if="(selectedUser.role === 'sponsor' || selectedUser.role === 'influencer') && !selectedUser.is_approved" 
-                           class="d-flex gap-2 w-100">
+                      <!-- For pending users: show approve and reject buttons -->
+                      <div v-if="(selectedUser.role === 'sponsor' && selectedUser.sponsor_approved === false) || 
+                                  (selectedUser.role === 'influencer' && selectedUser.influencer_approved === false)" 
+                               class="d-flex gap-2 flex-wrap">
                         <button 
-                          class="btn btn-success flex-grow-1"
+                          class="btn btn-success"
                           @click="approveUser(selectedUser)"
                           :disabled="actionLoading"
                         >
-                          <i class="bi bi-check-circle me-2"></i>
+                          <i class="bi bi-check-circle me-1"></i>
                           Approve {{ selectedUser.role === 'sponsor' ? 'Sponsor' : 'Influencer' }}
                         </button>
                         
                         <button 
-                          class="btn btn-danger flex-grow-1"
+                          class="btn btn-danger"
                           @click="rejectUser(selectedUser)"
                           :disabled="actionLoading"
                         >
-                          <i class="bi bi-x-circle me-2"></i>
+                          <i class="bi bi-x-circle me-1"></i>
                           Reject {{ selectedUser.role === 'sponsor' ? 'Sponsor' : 'Influencer' }}
                         </button>
                       </div>
                       
-                      <!-- Show flag button for all users -->
-                      <button 
-                        class="btn" 
-                        :class="selectedUser.is_flagged ? 'btn-warning' : 'btn-outline-danger'"
-                        @click="toggleFlagUser(selectedUser)"
-                        :disabled="actionLoading"
-                      >
-                        <i class="bi" :class="selectedUser.is_flagged ? 'bi-flag' : 'bi-flag-fill'"></i>
-                        {{ selectedUser.is_flagged ? 'Unflag User' : 'Flag User' }}
-                      </button>
+                      <!-- For approved users: show flag/unflag buttons -->
+                      <div v-else class="d-flex gap-2 flex-wrap">
+                        <button 
+                          class="btn" 
+                          :class="selectedUser.is_flagged ? 'btn-warning' : 'btn-outline-danger'"
+                          @click="toggleFlagUser(selectedUser)"
+                          :disabled="actionLoading"
+                        >
+                          <i class="bi" :class="selectedUser.is_flagged ? 'bi-flag me-1' : 'bi-flag-fill me-1'"></i>
+                          {{ selectedUser.is_flagged ? 'Unflag User' : 'Flag User' }}
+                        </button>
+                        
+                        <!-- Additional action buttons for approved users could be added here -->
+                        <button 
+                          v-if="selectedUser.is_active"
+                          class="btn btn-outline-secondary"
+                          @click="deactivateUser(selectedUser)"
+                          :disabled="actionLoading"
+                        >
+                          <i class="bi bi-person-dash me-1"></i>
+                          Deactivate User
+                        </button>
+                        
+                        <button 
+                          v-else
+                          class="btn btn-outline-success"
+                          @click="activateUser(selectedUser)"
+                          :disabled="actionLoading"
+                        >
+                          <i class="bi bi-person-check me-1"></i>
+                          Activate User
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" @click="handleModalClose">Close</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-    </div>
-  </div>
-</template>
-
-<style scoped>
-.admin-users {
-  animation: fadeIn 0.5s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.avatar-placeholder {
-  color: var(--bs-primary);
-}
-</style> 
-                  <div v-if="selectedUser.is_flagged" class="badge bg-danger mb-2">
-                    <i class="bi bi-flag-fill me-1"></i> Flagged
-                  </div>
-                  <p class="text-muted">Joined on {{ formatDate(selectedUser.created_at) }}</p>
-                </div>
-                <div class="col-md-8">
-                  <div class="mb-3">
-                    <h6 class="fw-bold">Account Information</h6>
-                    <div class="table-responsive">
-                      <table class="table">
-                        <tbody>
-                          <tr>
-                            <th scope="row" style="width: 130px;">User ID</th>
-                            <td>{{ selectedUser.id }}</td>
-                          </tr>
-                          <tr>
-                            <th scope="row">Email</th>
-                            <td>
-                              <div class="d-flex align-items-center">
-                                {{ selectedUser.email }}
-                                <span 
-                                  v-if="!isValidEmail(selectedUser.email)" 
-                                  class="badge bg-warning ms-2" 
-                                  title="Invalid email format"
-                                >
-                                  <i class="bi bi-exclamation-triangle"></i>
-                                </span>
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <th scope="row">Status</th>
-                            <td>
-                              <span :class="{
-                                'badge bg-success': selectedUser.is_active && ((selectedUser.role === 'sponsor' && selectedUser.is_approved) || (selectedUser.role === 'influencer' && selectedUser.is_approved) || selectedUser.role === 'admin'),
-                                'badge bg-warning': (selectedUser.role === 'sponsor' || selectedUser.role === 'influencer') && !selectedUser.is_approved,
-                                'badge bg-secondary': !selectedUser.is_active
-                              }">
-                                {{ 
-                                  !selectedUser.is_active ? 'Inactive' : 
-                                  ((selectedUser.role === 'sponsor' || selectedUser.role === 'influencer') && !selectedUser.is_approved) ? 'Pending Approval' : 
-                                  'Active' 
-                                }}
-                              </span>
-                            </td>
-                          </tr>
-                          <tr v-if="selectedUser.role === 'sponsor'">
-                            <th scope="row">Company</th>
-                            <td>{{ selectedUser.company_name || 'Not provided' }}</td>
-                          </tr>
-                          <tr v-if="selectedUser.role === 'sponsor'">
-                            <th scope="row">Industry</th>
-                            <td>{{ selectedUser.industry || 'Not provided' }}</td>
-                          </tr>
-                          <tr v-if="selectedUser.role === 'influencer'">
-                            <th scope="row">Specialty</th>
-                            <td>{{ selectedUser.niche || 'Not specified' }}</td>
-                          </tr>
-                          <tr v-if="selectedUser.role === 'influencer'">
-                            <th scope="row">Reach</th>
-                            <td>{{ selectedUser.reach ? selectedUser.reach.toLocaleString() : 'Not specified' }}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h6 class="fw-bold">Quick Actions</h6>
-                    <div class="d-flex gap-2 flex-wrap">
-                      <!-- Show approve/reject buttons for pending users -->
-                      <div v-if="(selectedUser.role === 'sponsor' || selectedUser.role === 'influencer') && !selectedUser.is_approved" 
-                           class="d-flex gap-2 w-100">
-                        <button 
-                          class="btn btn-success flex-grow-1"
-                          @click="approveUser(selectedUser)"
-                          :disabled="actionLoading"
-                        >
-                          <i class="bi bi-check-circle me-2"></i>
-                          Approve {{ selectedUser.role === 'sponsor' ? 'Sponsor' : 'Influencer' }}
-                        </button>
-                        
-                        <button 
-                          class="btn btn-danger flex-grow-1"
-                          @click="rejectUser(selectedUser)"
-                          :disabled="actionLoading"
-                        >
-                          <i class="bi bi-x-circle me-2"></i>
-                          Reject {{ selectedUser.role === 'sponsor' ? 'Sponsor' : 'Influencer' }}
-                        </button>
-                      </div>
-                      
-                      <!-- Show flag button for all users -->
-                      <button 
-                        class="btn" 
-                        :class="selectedUser.is_flagged ? 'btn-warning' : 'btn-outline-danger'"
-                        @click="toggleFlagUser(selectedUser)"
-                        :disabled="actionLoading"
-                      >
-                        <i class="bi" :class="selectedUser.is_flagged ? 'bi-flag' : 'bi-flag-fill'"></i>
-                        {{ selectedUser.is_flagged ? 'Unflag User' : 'Flag User' }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" @click="handleModalClose">Close</button>
+            <div class="modal-footer bg-light">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" @click="closeModal">Close</button>
             </div>
           </div>
         </div>

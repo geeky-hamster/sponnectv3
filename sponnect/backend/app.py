@@ -7,7 +7,7 @@ from flask_jwt_extended import (
     get_jwt_identity, get_jwt, verify_jwt_in_request
 )
 from functools import wraps
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func # For stats count
 from math import ceil # For pagination calculation
 import os
@@ -17,20 +17,63 @@ from config import Config
 from models import db, User, Campaign, AdRequest, Payment, NegotiationHistory, ProgressUpdate
 
 # --- App Initialization ---
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../frontend/dist', static_url_path='/')
 # Fix CORS configuration to allow all required methods
-CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"], "allow_headers": ["Content-Type", "Authorization"]}}, supports_credentials=True)
+CORS(app, resources={r"/api/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "PATCH"]}}, supports_credentials=True)
 app.config.from_object(Config)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:////home/soham/sponnectv3/sponnect/backend/sponnect.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///sponnect.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'dev-key-change-in-production')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)  # Longer expiry for demo purposes
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'super-secret')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)  # Token expires in 24 hours
+app.config['JWT_IDENTITY_CLAIM'] = 'sub'  # Use 'sub' claim to store identity
 
 # --- Extension Initialization ---
 db.init_app(app)  # Initialize the db instance from models.py
 jwt = JWTManager(app)
 with app.app_context(): # create tables if they don't exist
     db.create_all()
+
+# Configure Flask-Mail
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'localhost')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 1025))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'False').lower() == 'true'
+app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL', 'False').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', None)
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', None)
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@sponnect.com')
+
+# Configure Flask-Caching with Redis
+app.config['CACHE_TYPE'] = 'redis'
+app.config['CACHE_REDIS_URL'] = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+app.config['CACHE_DEFAULT_TIMEOUT'] = 300  # 5 minutes default cache timeout
+
+# Initialize extensions
+from mailer import mail
+from flask_caching import Cache
+import workers
+from workers import celery
+
+mail.init_app(app)
+cache = Cache(app)
+
+# Configure Celery
+celery.conf.update(
+    broker_url=os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/1'),
+    result_backend=os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/2'),
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='UTC',
+    enable_utc=True,
+    task_always_eager=False,
+    broker_connection_retry_on_startup=True
+)
+
+# Set task base class which provides app context
+celery.Task = workers.ContextTask
+
+# Push app context
+app.app_context().push()
 
 # --- Error Handling ---
 @app.errorhandler(Exception)
@@ -57,6 +100,38 @@ def serialize_pagination(pagination_obj):
         'next_num': pagination_obj.next_num
     }
 
+# --- Constants ---
+# Indian Rupee symbol and IST timezone
+CURRENCY_SYMBOL = '₹'
+IST = timezone(timedelta(hours=5, minutes=30))  # IST is UTC+5:30
+
+# --- Helper Functions for Currency and Time ---
+def format_currency(amount):
+    """Format amount as Indian Rupees"""
+    if amount is None:
+        return None
+    return f"{CURRENCY_SYMBOL}{amount:,.2f}"
+
+def utc_to_ist(utc_datetime):
+    """Convert UTC datetime to IST timezone"""
+    if utc_datetime is None:
+        return None
+    ist_datetime = utc_datetime.replace(tzinfo=timezone.utc).astimezone(IST)
+    return ist_datetime
+
+def format_datetime(utc_datetime, format_str="%d-%m-%Y %H:%M:%S"):
+    """Convert UTC datetime to IST and format it"""
+    if utc_datetime is None:
+        return None
+    ist_datetime = utc_to_ist(utc_datetime)
+    return ist_datetime.strftime(format_str)
+
+def format_date(utc_datetime, format_str="%d-%m-%Y"):
+    """Convert UTC date to IST and format it"""
+    if utc_datetime is None:
+        return None
+    ist_datetime = utc_to_ist(utc_datetime)
+    return ist_datetime.strftime(format_str)
 
 # --- Add Negotiation History ---
 # The models are already imported at the top of the file, no need to reimport them
@@ -106,19 +181,34 @@ def serialize_user_profile(user):
             'influencer_name': user.influencer_name, 
             'category': user.category, 
             'niche': user.niche, 
-            'reach': user.reach
+            'reach': user.reach,
+            'influencer_approved': user.influencer_approved
         })
     return data
 
 def serialize_campaign_basic(campaign):
-     return {'id': campaign.id, 'name': campaign.name, 'budget': campaign.budget, 'visibility': campaign.visibility, 'is_flagged': campaign.is_flagged}
+     return {
+        'id': campaign.id, 
+        'name': campaign.name, 
+        'budget': campaign.budget, 
+        'budget_formatted': format_currency(campaign.budget),
+        'visibility': campaign.visibility, 
+        'is_flagged': campaign.is_flagged
+     }
 
 def serialize_campaign_detail(campaign):
     data = serialize_campaign_basic(campaign)
-    data.update({'description': campaign.description, 'goals': campaign.goals, 'sponsor_id': campaign.sponsor_id,
-                 'start_date': campaign.start_date.isoformat() if campaign.start_date else None,
-                 'end_date': campaign.end_date.isoformat() if campaign.end_date else None,
-                 'created_at': campaign.created_at.isoformat() if campaign.created_at else None})
+    data.update({
+        'description': campaign.description, 
+        'goals': campaign.goals, 
+        'sponsor_id': campaign.sponsor_id,
+        'start_date': format_date(campaign.start_date) if campaign.start_date else None,
+        'end_date': format_date(campaign.end_date) if campaign.end_date else None,
+        'created_at': format_datetime(campaign.created_at) if campaign.created_at else None,
+        'start_date_iso': campaign.start_date.isoformat() if campaign.start_date else None,
+        'end_date_iso': campaign.end_date.isoformat() if campaign.end_date else None,
+        'created_at_iso': campaign.created_at.isoformat() if campaign.created_at else None
+    })
     return data
 
 def serialize_ad_request_detail(ad_request):
@@ -140,11 +230,14 @@ def serialize_ad_request_detail(ad_request):
             'initiator_id': ad_request.initiator_id, 
             'message': ad_request.message, 
             'requirements': ad_request.requirements,
-            'payment_amount': ad_request.payment_amount, 
+            'payment_amount': ad_request.payment_amount,
+            'payment_amount_formatted': format_currency(ad_request.payment_amount),
             'status': ad_request.status, 
             'last_offer_by': ad_request.last_offer_by,
-            'created_at': ad_request.created_at.isoformat() if ad_request.created_at else None,
-            'updated_at': ad_request.updated_at.isoformat() if ad_request.updated_at else None,
+            'created_at': format_datetime(ad_request.created_at) if ad_request.created_at else None,
+            'updated_at': format_datetime(ad_request.updated_at) if ad_request.updated_at else None,
+            'created_at_iso': ad_request.created_at.isoformat() if ad_request.created_at else None,
+            'updated_at_iso': ad_request.updated_at.isoformat() if ad_request.updated_at else None,
             # Include basic related info
             'campaign_name': campaign_name,
             'influencer_name': influencer_name,
@@ -166,8 +259,10 @@ def serialize_negotiation_history(history_item):
         'action': history_item.action,
         'message': history_item.message,
         'payment_amount': history_item.payment_amount,
+        'payment_amount_formatted': format_currency(history_item.payment_amount),
         'requirements': history_item.requirements,
-        'created_at': history_item.created_at.isoformat() if history_item.created_at else None,
+        'created_at': format_datetime(history_item.created_at) if history_item.created_at else None,
+        'created_at_iso': history_item.created_at.isoformat() if history_item.created_at else None,
         'username': history_item.user.username if history_item.user else None,
     }
 
@@ -364,9 +459,13 @@ def get_admin_stats():
         'ad_requests_by_status': dict(ad_request_stats),
         'payment_stats': {
             'total_payments': round(total_payments, 2),
+            'total_payments_formatted': format_currency(total_payments),
             'total_platform_fees': round(total_platform_fees, 2),
+            'total_platform_fees_formatted': format_currency(total_platform_fees),
             'total_payment_count': total_payment_count,
-            'recent_fees': round(recent_fees, 2)
+            'recent_fees': round(recent_fees, 2),
+            'recent_fees_formatted': format_currency(recent_fees),
+            'currency_symbol': CURRENCY_SYMBOL
         }
     }), 200
 
@@ -637,7 +736,15 @@ def sponsor_create_ad_request(campaign_id):
     db.session.add(history)
     
     db.session.commit()
-    return jsonify({"message": "Ad request created", "ad_request": serialize_ad_request_detail(ad_request)}), 201
+    
+    # Schedule notification email task for new ad request
+    from task import send_test_email
+    send_test_email.delay(influencer.email)
+    
+    return jsonify({
+        "message": "Ad request created successfully",
+        "ad_request": serialize_ad_request_detail(ad_request)
+    }), 201
 
 @app.route('/api/sponsor/ad_requests', methods=['GET']) # Get all ad requests initiated by sponsor
 @jwt_required()
@@ -668,17 +775,23 @@ def sponsor_get_all_ad_requests():
                 "influencer_name": ar.target_influencer.username if ar.target_influencer else "Unknown",
                 "status": ar.status,
                 "payment_amount": ar.payment_amount,
+                "payment_amount_formatted": format_currency(ar.payment_amount),
                 "last_offer_by": ar.last_offer_by,
                 "requirements": ar.requirements,
-                "created_at": ar.created_at.isoformat() if ar.created_at else None,
-                "updated_at": ar.updated_at.isoformat() if ar.updated_at else None
+                "created_at": format_datetime(ar.created_at),
+                "updated_at": format_datetime(ar.updated_at),
+                "created_at_iso": ar.created_at.isoformat() if ar.created_at else None,
+                "updated_at_iso": ar.updated_at.isoformat() if ar.updated_at else None
             }
             ad_requests_data.append(data)
         except Exception as e:
             app.logger.error(f"Error serializing ad request {ar.id}: {str(e)}")
             # Continue with next item instead of failing completely
             
-    return jsonify({"ad_requests": ad_requests_data}), 200
+    return jsonify({
+        "ad_requests": ad_requests_data,
+        "currency_symbol": CURRENCY_SYMBOL
+    }), 200
 
 @app.route('/api/sponsor/ad_requests/<int:ad_request_id>', methods=['GET'])
 @jwt_required()
@@ -704,10 +817,12 @@ def sponsor_get_ad_request(ad_request_id):
                 "action": neg.action,
                 "message": neg.message,
                 "payment_amount": neg.payment_amount,
+                "payment_amount_formatted": format_currency(neg.payment_amount),
                 "requirements": neg.requirements,
                 "actor": neg.user_role,
                 "actor_name": neg.user.username if neg.user else "Unknown User",
-                "created_at": neg.created_at.isoformat()
+                "created_at": format_datetime(neg.created_at),
+                "created_at_iso": neg.created_at.isoformat() if neg.created_at else None
             } for neg in negotiations
         ]
         
@@ -737,17 +852,21 @@ def sponsor_get_ad_request(ad_request_id):
             "influencer_details": influencer_details,
             "status": ad_request.status,
             "payment_amount": ad_request.payment_amount,
+            "payment_amount_formatted": format_currency(ad_request.payment_amount),
             "last_offer_by": ad_request.last_offer_by,
             "requirements": ad_request.requirements,
             "message": ad_request.message,
-            "created_at": ad_request.created_at.isoformat() if ad_request.created_at else None,
-            "updated_at": ad_request.updated_at.isoformat() if ad_request.updated_at else None,
+            "created_at": format_datetime(ad_request.created_at),
+            "updated_at": format_datetime(ad_request.updated_at),
+            "created_at_iso": ad_request.created_at.isoformat() if ad_request.created_at else None,
+            "updated_at_iso": ad_request.updated_at.isoformat() if ad_request.updated_at else None,
             "negotiation_history": negotiation_history,
             # Add clear negotiation status flags for UI
             "can_respond": ad_request.status == 'Negotiating' and ad_request.last_offer_by == 'influencer',
             "is_active": ad_request.status in ['Pending', 'Negotiating'],
             "is_completed": ad_request.status == 'Accepted',
-            "is_rejected": ad_request.status == 'Rejected'
+            "is_rejected": ad_request.status == 'Rejected',
+            "currency_symbol": CURRENCY_SYMBOL
         }
         
         return jsonify(ad_request_data), 200
@@ -1374,7 +1493,9 @@ def chart_dashboard_summary():
         'conversionRate': {
             'value': round((accepted_requests / total_requests * 100), 1) if total_requests > 0 else 0,
             'label': 'Acceptance Rate'
-        }
+        },
+        'currencySymbol': CURRENCY_SYMBOL,
+        'timezoneName': 'IST (UTC+5:30)'
     }
     
     return jsonify(chart_data), 200
@@ -1701,8 +1822,10 @@ def serialize_progress_update(update):
         'metrics_data': update.metrics_data,  # Front-end will parse this JSON
         'status': update.status,
         'feedback': update.feedback,
-        'created_at': update.created_at.isoformat() if update.created_at else None,
-        'updated_at': update.updated_at.isoformat() if update.updated_at else None
+        'created_at': format_datetime(update.created_at) if update.created_at else None,
+        'updated_at': format_datetime(update.updated_at) if update.updated_at else None,
+        'created_at_iso': update.created_at.isoformat() if update.created_at else None,
+        'updated_at_iso': update.updated_at.isoformat() if update.updated_at else None
     }
 
 def serialize_payment(payment):
@@ -1711,13 +1834,18 @@ def serialize_payment(payment):
         'id': payment.id,
         'ad_request_id': payment.ad_request_id,
         'amount': payment.amount,
+        'amount_formatted': format_currency(payment.amount),
         'platform_fee': payment.platform_fee,
+        'platform_fee_formatted': format_currency(payment.platform_fee),
         'influencer_amount': payment.influencer_amount,
+        'influencer_amount_formatted': format_currency(payment.influencer_amount),
         'status': payment.status,
         'payment_method': payment.payment_method,
         'transaction_id': payment.transaction_id,
-        'created_at': payment.created_at.isoformat() if payment.created_at else None,
-        'updated_at': payment.updated_at.isoformat() if payment.updated_at else None
+        'created_at': format_datetime(payment.created_at) if payment.created_at else None,
+        'updated_at': format_datetime(payment.updated_at) if payment.updated_at else None,
+        'created_at_iso': payment.created_at.isoformat() if payment.created_at else None,
+        'updated_at_iso': payment.updated_at.isoformat() if payment.updated_at else None
     }
 
 # == Influencer: Progress Updates ==
@@ -1782,226 +1910,63 @@ def influencer_add_progress_update(ad_request_id):
         db.session.rollback()
         return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
-# == Sponsor: Progress Updates ==
-@app.route('/api/sponsor/ad_requests/<int:ad_request_id>/progress', methods=['GET'])
-@jwt_required()
-@sponsor_required
-def sponsor_get_progress_updates(ad_request_id):
-    sponsor_id = get_jwt_identity()
-    app.logger.info(f"Sponsor {sponsor_id} requesting progress updates for ad_request {ad_request_id}")
-    
-    try:
-        # Verify ownership via campaign
-        ad_request = AdRequest.query.join(Campaign).filter(AdRequest.id == ad_request_id, Campaign.sponsor_id == sponsor_id).first()
-        
-        if not ad_request:
-            app.logger.warning(f"Access denied: Sponsor {sponsor_id} tried to access ad_request {ad_request_id}")
-            return jsonify({"message": "Ad Request not found/denied"}), 404
-        
-        # Log campaign details
-        app.logger.info(f"Found ad_request {ad_request_id} for campaign {ad_request.campaign_id}, sponsor verified")
-        
-        # Get all progress updates without filtering by status
-        updates = ProgressUpdate.query.filter_by(ad_request_id=ad_request_id).order_by(ProgressUpdate.created_at.desc()).all()
-        
-        app.logger.info(f"Found {len(updates)} progress updates for ad_request {ad_request_id}")
-        
-        # Log details of each update for debugging
-        for update in updates:
-            app.logger.info(f"Progress update {update.id}: status={update.status}, created_at={update.created_at}")
-        
-        return jsonify([serialize_progress_update(update) for update in updates]), 200
-    
-    except Exception as e:
-        app.logger.error(f"Error in sponsor_get_progress_updates: {str(e)}", exc_info=True)
-        return jsonify({"message": f"An error occurred: {str(e)}"}), 500
-
-@app.route('/api/sponsor/ad_requests/<int:ad_request_id>/progress/<int:update_id>', methods=['PATCH'])
-@jwt_required()
-@sponsor_required
-def sponsor_review_progress_update(ad_request_id, update_id):
-    sponsor_id = get_jwt_identity()
-    # Verify ownership via campaign
-    ad_request = AdRequest.query.join(Campaign).filter(AdRequest.id == ad_request_id, Campaign.sponsor_id == sponsor_id).first()
-    if not ad_request: return jsonify({"message": "Ad Request not found/denied"}), 404
-    
-    update = ProgressUpdate.query.filter_by(id=update_id, ad_request_id=ad_request_id).first()
-    if not update: return jsonify({"message": "Progress update not found"}), 404
-    
-    data = request.get_json()
-    action = data.get('action')  # 'approve' or 'request_revision'
-    
-    if action not in ['approve', 'request_revision']: return jsonify({"message": "Invalid action"}), 400
-    
-    if action == 'approve':
-        update.status = 'Approved'
-    else:
-        if not data.get('feedback'): return jsonify({"message": "Feedback is required for revision requests"}), 400
-        update.status = 'Revision Requested'
-        update.feedback = data.get('feedback')
-    
-    update.updated_at = datetime.utcnow()
-    db.session.commit()
-    
-    return jsonify({
-        "message": f"Progress update {action.replace('_', ' ')}d",
-        "progress_update": serialize_progress_update(update)
-    }), 200
-
-# == Payments ==
-@app.route('/api/sponsor/ad_requests/<int:ad_request_id>/payments', methods=['GET'])
-@jwt_required()
-@sponsor_required
-def sponsor_get_payments(ad_request_id):
-    sponsor_id = get_jwt_identity()
-    # Verify ownership via campaign
-    ad_request = AdRequest.query.join(Campaign).filter(AdRequest.id == ad_request_id, Campaign.sponsor_id == sponsor_id).first()
-    if not ad_request: return jsonify({"message": "Ad Request not found/denied"}), 404
-    
-    payments = Payment.query.filter_by(ad_request_id=ad_request_id).order_by(Payment.created_at.desc()).all()
-    return jsonify([serialize_payment(payment) for payment in payments]), 200
-
-@app.route('/api/sponsor/ad_requests/<int:ad_request_id>/payments', methods=['POST'])
-@jwt_required()
-@sponsor_required
-def sponsor_create_payment(ad_request_id):
-    sponsor_id = get_jwt_identity()
-    # Verify ownership via campaign
-    ad_request = AdRequest.query.join(Campaign).filter(AdRequest.id == ad_request_id, Campaign.sponsor_id == sponsor_id).first()
-    if not ad_request: return jsonify({"message": "Ad Request not found/denied"}), 404
-    
-    if ad_request.status != 'Accepted': return jsonify({"message": "Can only make payments for accepted requests"}), 400
-    
-    # Check if the influencer has submitted progress updates that are approved
-    approved_updates = ProgressUpdate.query.filter_by(
-        ad_request_id=ad_request_id, 
-        status='Approved'
-    ).count()
-    
-    if approved_updates == 0:
-        return jsonify({"message": "Cannot make payment until the influencer has at least one approved progress update"}), 400
-    
-    data = request.get_json()
-    
-    if not data.get('amount'): return jsonify({"message": "Amount is required"}), 400
-    try: amount = float(data.get('amount'))
-    except (ValueError, TypeError): return jsonify({"message": "Invalid amount"}), 400
-    
-    # Calculate platform fee (1% of payment amount)
-    platform_fee = round(amount * 0.01, 2)  # 1% fee rounded to 2 decimal places
-    influencer_amount = amount - platform_fee  # Amount after deducting platform fee
-    
-    # In a real app, you would integrate with a payment processor here
-    # For demo purposes, we'll just create a payment record
-    payment = Payment(
-        ad_request_id=ad_request_id,
-        amount=amount,
-        platform_fee=platform_fee,
-        influencer_amount=influencer_amount,
-        status='Completed',  # Auto-complete for demo
-        payment_method=data.get('payment_method', 'Credit Card'),
-        transaction_id=f"DEMO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-    )
-    
-    db.session.add(payment)
-    db.session.commit()
-    
-    return jsonify({
-        "message": "Payment processed successfully",
-        "payment": serialize_payment(payment),
-        "details": {
-            "total_amount": amount,
-            "platform_fee": platform_fee,
-            "influencer_amount": influencer_amount
-        }
-    }), 201
-
-@app.route('/api/influencer/ad_requests/<int:ad_request_id>/payments', methods=['GET'])
-@jwt_required()
-@influencer_required
-def influencer_get_payments(ad_request_id):
-    influencer_id = get_jwt_identity()
-    ad_request = AdRequest.query.filter_by(id=ad_request_id, influencer_id=influencer_id).first()
-    if not ad_request: return jsonify({"message": "Ad Request not found/denied"}), 404
-    
-    payments = Payment.query.filter_by(ad_request_id=ad_request_id).order_by(Payment.created_at.desc()).all()
-    return jsonify([serialize_payment(payment) for payment in payments]), 200
-
-# == Admin: Platform Fees ==
-@app.route('/api/admin/platform-fees', methods=['GET'])
+# Add API endpoint for testing Celery integration
+@app.route('/api/admin/test/celery', methods=['POST'])
 @jwt_required()
 @admin_required
-def admin_get_platform_fees():
-    """Get platform fees collected from payments"""
-    # Parse filters
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+def test_celery():
+    """Endpoint for testing Celery integration"""
+    data = request.get_json()
+    email = data.get('email')
     
-    # Build query
-    query = db.session.query(
-        Payment.id,
-        Payment.ad_request_id,
-        Payment.amount,
-        Payment.platform_fee,
-        Payment.status,
-        Payment.created_at,
-        AdRequest.id.label('ad_request_id'),
-        AdRequest.influencer_id,
-        Campaign.id.label('campaign_id'),
-        Campaign.name.label('campaign_name'),
-        Campaign.sponsor_id
-    ).join(
-        AdRequest, Payment.ad_request_id == AdRequest.id
-    ).join(
-        Campaign, AdRequest.campaign_id == Campaign.id
-    )
+    if not email:
+        return jsonify({"message": "Email is required"}), 400
     
-    # Apply date filters if provided
-    if start_date:
-        try:
-            start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-            query = query.filter(Payment.created_at >= start)
-        except (ValueError, TypeError):
-            pass
-            
-    if end_date:
-        try:
-            end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-            query = query.filter(Payment.created_at <= end)
-        except (ValueError, TypeError):
-            pass
+    # Import and trigger test email task
+    from task import send_test_email
+    task = send_test_email.delay(email)
     
-    # Only include completed payments
-    query = query.filter(Payment.status == 'Completed')
-    
-    # Order by latest first
-    query = query.order_by(Payment.created_at.desc())
-    
-    # Execute query
-    fees = query.all()
-    
-    # Format results
-    results = []
-    total_fees = 0
-    
-    for fee in fees:
-        results.append({
-            'payment_id': fee.id,
-            'ad_request_id': fee.ad_request_id,
-            'campaign_id': fee.campaign_id,
-            'campaign_name': fee.campaign_name,
-            'sponsor_id': fee.sponsor_id,
-            'influencer_id': fee.influencer_id,
-            'payment_amount': fee.amount,
-            'platform_fee': fee.platform_fee,
-            'created_at': fee.created_at.isoformat() if fee.created_at else None
-        })
-        total_fees += fee.platform_fee
-    
-    # Return summary and details
     return jsonify({
-        'total_platform_fees': round(total_fees, 2),
-        'fee_count': len(results),
-        'fees': results
+        "message": "Test email task triggered",
+        "task_id": task.id,
+        "status": "Processing"
     }), 200
 
+# Add API endpoint for exporting user data
+@app.route('/api/admin/export/users', methods=['POST'])
+@jwt_required()
+@admin_required
+def export_users():
+    """Trigger a background task to export all users data"""
+    admin_id = get_jwt_identity()
+    
+    # Import and trigger export task
+    from task import export_user_data
+    task = export_user_data.delay(admin_id)
+    
+    return jsonify({
+        "message": "User export started in background",
+        "task_id": task.id,
+        "status": "Processing"
+    }), 200
+
+# Add API endpoint for checking Celery task status
+@app.route('/api/admin/tasks/<task_id>', methods=['GET'])
+@jwt_required()
+@admin_required
+def check_task_status(task_id):
+    """Check the status of a background task"""
+    from workers import celery
+    task = celery.AsyncResult(task_id)
+    
+    response = {
+        "task_id": task_id,
+        "status": task.state
+    }
+    
+    if task.state == 'SUCCESS':
+        response["result"] = task.result
+    elif task.state == 'FAILURE':
+        response["error"] = str(task.result)
+    
+    return jsonify(response), 200

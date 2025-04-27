@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ad Request Reminder</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: {% if urgent %}#ff6b6b{% else %}#4361ee{% endif %};
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            padding: 20px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: {% if urgent %}#ff6b6b{% else %}#4361ee{% endif %};
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+        .urgent {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{% if urgent %}URGENT: {% endif %}Ad Request Reminder</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{ user.username }},</p>
+        
+        {% if user_type == 'sponsor' %}
+            <p>This is a reminder about your pending ad request to work with <strong>{{ influencer.username }}</strong> on your campaign <strong>{{ campaign.name }}</strong>.</p>
+        {% else %}
+            <p>This is a reminder about a pending ad request from <strong>{{ sponsor.username }}</strong> for their campaign <strong>{{ campaign.name }}</strong>.</p>
+        {% endif %}
+        
+        {% if urgent %}
+            <p class="urgent">This request has been pending for over {{ days_pending }} days and requires your immediate attention!</p>
+        {% else %}
+            <p>This request has been pending for {{ days_pending }} days. Please take action soon.</p>
+        {% endif %}
+        
+        <p>Request details:</p>
+        <ul>
+            <li><strong>Ad Request ID:</strong> {{ ad_request.id }}</li>
+            <li><strong>Campaign:</strong> {{ campaign.name }}</li>
+            <li><strong>Created on:</strong> {{ ad_request.created_at.strftime('%Y-%m-%d') }}</li>
+            <li><strong>Status:</strong> {{ ad_request.status }}</li>
+            {% if ad_request.offer_amount %}
+                <li><strong>Offer Amount:</strong> ${{ ad_request.offer_amount }}</li>
+            {% endif %}
+        </ul>
+        
+        {% if user_type == 'sponsor' %}
+            <a href="https://sponnect.com/sponsor/ad-requests/{{ ad_request.id }}" class="cta-button">Review Ad Request</a>
+        {% else %}
+            <a href="https://sponnect.com/influencer/ad-requests/{{ ad_request.id }}" class="cta-button">Review Ad Request</a>
+        {% endif %}
+        
+        <p>Thank you for using Sponnect!</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from Sponnect. Please do not reply to this email.</p>
+        <p>© 2023 Sponnect. All rights reserved.</p>
+    </div>
+</body>
+</html> 

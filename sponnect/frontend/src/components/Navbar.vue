@@ -176,6 +176,3 @@ const logout = () => {
   }
 }
 </style> 
-  }
-}
-</style> 

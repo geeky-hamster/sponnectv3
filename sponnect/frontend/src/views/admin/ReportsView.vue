@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { adminService } from '../../services/api'
+import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters'
 
 // State
 const loading = ref(true)
@@ -132,18 +133,9 @@ const loadReports = async () => {
   }
 }
 
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0
-  }).format(amount)
-}
-
 // Format number with commas
 const formatNumber = (num) => {
-  return new Intl.NumberFormat().format(num)
+  return new Intl.NumberFormat('en-IN').format(num)
 }
 
 // Watch for date range changes

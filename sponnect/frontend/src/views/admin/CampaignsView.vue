@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { adminService } from '../../services/api'
+import { formatCurrency, formatDate } from '../../utils/formatters'
 
 // State
 const campaigns = ref([])
@@ -201,14 +202,6 @@ const getCampaignStatusBadge = (status) => {
   }
 }
 
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0
-  }).format(amount)
-}
-
 const viewCampaignDetails = (campaign) => {
   // Navigate to campaign details page
   // This would typically be implemented with vue-router
@@ -307,7 +300,7 @@ const viewCampaignDetails = (campaign) => {
             <div class="col-md-4">
               <label for="budget-min" class="form-label">Min Budget</label>
               <div class="input-group">
-                <span class="input-group-text">$</span>
+                <span class="input-group-text">₹</span>
                 <input 
                   type="number" 
                   class="form-control" 
@@ -321,7 +314,7 @@ const viewCampaignDetails = (campaign) => {
             <div class="col-md-4">
               <label for="budget-max" class="form-label">Max Budget</label>
               <div class="input-group">
-                <span class="input-group-text">$</span>
+                <span class="input-group-text">₹</span>
                 <input 
                   type="number" 
                   class="form-control" 

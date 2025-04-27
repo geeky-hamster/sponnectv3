@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { adminService } from '../../services/api'
+import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters'
 
 const loading = ref(true)
 const error = ref('')
@@ -22,7 +23,8 @@ const stats = ref({
     total_payments: 0,
     total_platform_fees: 0,
     total_payment_count: 0,
-    recent_fees: 0
+    recent_fees: 0,
+    currency_symbol: '₹'
   }
 })
 const pendingSponsors = ref([])
@@ -44,7 +46,8 @@ const dashboardSummary = ref({
   conversionRate: {
     value: 0,
     label: 'Acceptance Rate'
-  }
+  },
+  currencySymbol: '₹'
 })
 // Add auto-refresh interval
 let refreshInterval = null
@@ -59,6 +62,11 @@ const getStatusPercentage = (status) => {
   return (stats.value.ad_requests_by_status[status] || 0) / total * 100
 }
 
+// Format a number with commas
+const formatNumber = (num) => {
+  return new Intl.NumberFormat('en-IN').format(num)
+}
+
 // Format currency
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-US', {
@@ -66,11 +74,6 @@ const formatCurrency = (amount) => {
     currency: 'USD',
     minimumFractionDigits: 0
   }).format(amount || 0)
-}
-
-// Format a number with commas
-const formatNumber = (num) => {
-  return new Intl.NumberFormat().format(num)
 }
 
 // Format date for display
@@ -304,7 +307,7 @@ const rejectUser = async (user) => {
                 <div class="d-flex justify-content-between">
                   <h5 class="card-title text-warning">Platform Revenue</h5>
                   <div class="bg-warning bg-opacity-10 rounded-circle p-2">
-                    <i class="bi bi-currency-dollar text-warning fs-4"></i>
+                    <i class="bi bi-currency-rupee text-warning fs-4"></i>
                   </div>
                 </div>
                 <h3 class="mt-3 mb-0 fw-bold">{{ formatCurrency(stats.payment_stats?.total_platform_fees || 0) }}</h3>
@@ -381,7 +384,7 @@ const rejectUser = async (user) => {
                     </div>
                   </div>
                 </div>
-              </div>
+            </div>
           </div>
         </div>
         
@@ -422,300 +425,6 @@ const rejectUser = async (user) => {
                         <div>
                           <div class="small text-muted">Pending</div>
                           <div class="fw-bold">{{ stats.ad_requests_by_status.Pending || 0 }}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="col-6 col-md-3 mb-3">
-                      <div class="d-flex align-items-center">
-                        <span class="badge bg-info p-2 me-2"></span>
-                        <div>
-                          <div class="small text-muted">Negotiating</div>
-                          <div class="fw-bold">{{ stats.ad_requests_by_status.Negotiating || 0 }}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="col-6 col-md-3 mb-3">
-                      <div class="d-flex align-items-center">
-                        <span class="badge bg-success p-2 me-2"></span>
-                        <div>
-                          <div class="small text-muted">Accepted</div>
-                          <div class="fw-bold">{{ stats.ad_requests_by_status.Accepted || 0 }}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="col-6 col-md-3 mb-3">
-                      <div class="d-flex align-items-center">
-                        <span class="badge bg-danger p-2 me-2"></span>
-                        <div>
-                          <div class="small text-muted">Rejected</div>
-                          <div class="fw-bold">{{ stats.ad_requests_by_status.Rejected || 0 }}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Pending Approvals Section -->
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-            <h4 class="mb-0 text-primary">Pending Sponsor Approvals</h4>
-            <span class="badge bg-warning rounded-pill">{{ pendingSponsors.length }}</span>
-          </div>
-          <div class="card-body p-0">
-            <div v-if="pendingSponsors.length === 0" class="text-center py-4">
-              <i class="bi bi-check-circle text-success fs-1"></i>
-              <p class="mt-2 mb-0">No pending sponsor approvals</p>
-            </div>
-            <div v-else class="table-responsive">
-              <table class="table table-hover mb-0">
-                <thead class="table-light">
-                  <tr>
-                    <th>Username</th>
-                    <th>Company</th>
-                    <th>Industry</th>
-                    <th>Email</th>
-                    <th>Registered</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="sponsor in pendingSponsors" :key="sponsor.id">
-                    <td>{{ sponsor.username }}</td>
-                    <td>{{ sponsor.company_name || 'Not specified' }}</td>
-                    <td>{{ sponsor.industry || 'Not specified' }}</td>
-                    <td>{{ sponsor.email }}</td>
-                    <td>{{ new Date(sponsor.created_at).toLocaleDateString() }}</td>
-                    <td>
-                      <div class="btn-group btn-group-sm">
-                        <button @click="approveSponsor(sponsor.id)" class="btn btn-success">
-                          <i class="bi bi-check me-1"></i>Approve
-                        </button>
-                        <button @click="rejectSponsor(sponsor.id)" class="btn btn-danger">
-                          <i class="bi bi-x me-1"></i>Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              </div>
-            </div>
-          </div>
-          
-        <!-- Quick Actions Card -->
-        <div class="card border-0 shadow-sm">
-              <div class="card-header bg-white border-0 py-3">
-            <h4 class="mb-0 text-primary">Quick Actions</h4>
-          </div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-3 col-sm-6">
-                <router-link to="/admin/users" class="card border-0 shadow-sm text-decoration-none card-hover h-100">
-                  <div class="card-body text-center p-4">
-                    <div class="bg-primary bg-opacity-10 rounded-circle p-3 mx-auto mb-3" style="width: fit-content">
-                      <i class="bi bi-people-fill text-primary fs-3"></i>
-                    </div>
-                    <h5 class="text-primary">Manage Users</h5>
-                    <p class="text-muted mb-0 small">View and manage platform users</p>
-                  </div>
-                </router-link>
-              </div>
-              <div class="col-md-3 col-sm-6">
-                <router-link to="/admin/campaigns" class="card border-0 shadow-sm text-decoration-none card-hover h-100">
-                  <div class="card-body text-center p-4">
-                    <div class="bg-success bg-opacity-10 rounded-circle p-3 mx-auto mb-3" style="width: fit-content">
-                      <i class="bi bi-megaphone-fill text-success fs-3"></i>
-                    </div>
-                    <h5 class="text-success">Campaigns</h5>
-                    <p class="text-muted mb-0 small">Manage and moderate campaigns</p>
-                  </div>
-                </router-link>
-              </div>
-              <div class="col-md-3 col-sm-6">
-                <router-link to="/admin/statistics" class="card border-0 shadow-sm text-decoration-none card-hover h-100">
-                  <div class="card-body text-center p-4">
-                    <div class="bg-info bg-opacity-10 rounded-circle p-3 mx-auto mb-3" style="width: fit-content">
-                      <i class="bi bi-graph-up text-info fs-3"></i>
-                    </div>
-                    <h5 class="text-info">Analytics</h5>
-                    <p class="text-muted mb-0 small">View detailed platform statistics</p>
-                  </div>
-                </router-link>
-                          </div>
-              <div class="col-md-3 col-sm-6">
-                <router-link to="/admin/platform-fees" class="card border-0 shadow-sm text-decoration-none card-hover h-100">
-                  <div class="card-body text-center p-4">
-                    <div class="bg-warning bg-opacity-10 rounded-circle p-3 mx-auto mb-3" style="width: fit-content">
-                      <i class="bi bi-cash-stack text-warning fs-3"></i>
-                          </div>
-                    <h5 class="text-warning">Revenue</h5>
-                    <p class="text-muted mb-0 small">Track platform earnings and fees</p>
-                        </div>
-                          </router-link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-        <!-- Pending Approvals Panel -->
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-            <h4 class="mb-0 text-primary">Pending Approvals</h4>
-            <span class="badge bg-warning rounded-pill">{{ pendingUsers.length }} users</span>
-                          </div>
-          <div class="card-body p-0">
-            <div v-if="pendingUsers.length === 0" class="text-center py-4">
-              <i class="bi bi-check-circle-fill text-success fs-1"></i>
-              <p class="mt-2 text-muted">No pending approval requests</p>
-                          </div>
-            <div v-else class="table-responsive">
-              <table class="table mb-0">
-                <thead class="table-light">
-                  <tr>
-                    <th>Name</th>
-                    <th>Role</th>
-                    <th>Email</th>
-                    <th>Joined</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="user in pendingUsers.slice(0, 5)" :key="user.id">
-                    <td>
-                      <div class="d-flex align-items-center">
-                        <div class="avatar-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center me-2" 
-                             style="width: 36px; height: 36px; font-size: 16px;">
-                          {{ user.username.charAt(0).toUpperCase() }}
-                        </div>
-                        {{ user.username }}
-                      </div>
-                    </td>
-                    <td>
-                      <span :class="`badge ${user.role === 'sponsor' ? 'bg-primary' : 'bg-info'}`">
-                        {{ user.role }}
-                      </span>
-                    </td>
-                    <td>{{ user.email }}</td>
-                    <td>{{ formatDate(user.created_at) }}</td>
-                    <td>
-                      <div class="btn-group btn-group-sm">
-                        <router-link :to="`/admin/users?view=${user.id}`" class="btn btn-outline-primary">
-                          <i class="bi bi-eye"></i>
-                        </router-link>
-                        <button class="btn btn-outline-success" @click="approveUser(user)">
-                          <i class="bi bi-check-lg"></i>
-                        </button>
-                        <button class="btn btn-outline-danger" @click="rejectUser(user)">
-                          <i class="bi bi-x-lg"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div v-if="pendingUsers.length > 5" class="text-center py-3 border-top">
-              <router-link to="/admin/users?status=pending" class="btn btn-sm btn-outline-primary">
-                View all {{ pendingUsers.length }} pending users
-                          </router-link>
-                        </div>
-                      </div>
-                    </div>
-
-        <!-- Statistics Cards Row -->
-        <div class="row g-4 mb-4">
-          <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="card-subtitle text-muted">Pending Sponsors</h6>
-                  <div class="icon-circle bg-primary bg-opacity-10">
-                    <i class="bi bi-briefcase text-primary"></i>
-                  </div>
-                </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.pending_sponsors || 0 }}</h2>
-                <router-link to="/admin/users?role=sponsor&status=pending" class="mt-3 d-inline-block text-decoration-none">
-                  Manage
-                  <i class="bi bi-arrow-right ms-1"></i>
-                </router-link>
-              </div>
-            </div>
-          </div>
-          
-          <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="card-subtitle text-muted">Pending Influencers</h6>
-                  <div class="icon-circle bg-info bg-opacity-10">
-                    <i class="bi bi-person-badge text-info"></i>
-        </div>
-          </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.pending_influencers || 0 }}</h2>
-                <router-link to="/admin/users?role=influencer&status=pending" class="mt-3 d-inline-block text-decoration-none">
-                  Manage
-                  <i class="bi bi-arrow-right ms-1"></i>
-                </router-link>
-              </div>
-            </div>
-          </div>
-          
-          <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="card-subtitle text-muted">Active Sponsors</h6>
-                  <div class="icon-circle bg-success bg-opacity-10">
-                    <i class="bi bi-building-check text-success"></i>
-                  </div>
-                </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.active_sponsors || 0 }}</h2>
-              </div>
-            </div>
-          </div>
-          
-          <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="card-subtitle text-muted">Active Influencers</h6>
-                  <div class="icon-circle bg-success bg-opacity-10">
-                    <i class="bi bi-person-check text-success"></i>
-                  </div>
-                </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.active_influencers || 0 }}</h2>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<style scoped>
-.admin-dashboard {
-  animation: fadeIn 0.5s ease-in-out;
-}
-
-.card-hover {
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.card-hover:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-</style> 
                         </div>
                       </div>
                     </div>

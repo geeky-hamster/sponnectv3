@@ -259,14 +259,3 @@ onMounted(() => {
   to { opacity: 1; }
 }
 </style> 
-
-<style scoped>
-.campaigns-view {
-  animation: fadeIn 0.5s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-</style> 

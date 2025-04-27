@@ -93,13 +93,10 @@ const logout = () => {
             <RouterLink class="nav-link" to="/influencer/dashboard">Dashboard</RouterLink>
           </li>
           <li class="nav-item">
-            <RouterLink class="nav-link" to="/influencer/ad-requests">My Requests</RouterLink>
+            <RouterLink class="nav-link" to="/influencer/ad-requests">Ad Requests</RouterLink>
           </li>
           <li class="nav-item">
-            <RouterLink class="nav-link" to="/search/campaigns">Search Campaigns</RouterLink>
-          </li>
-          <li class="nav-item">
-            <RouterLink class="nav-link" to="/influencer/campaigns/browse">Browse All Campaigns</RouterLink>
+            <RouterLink class="nav-link" to="/influencer/campaigns/browse">Browse Campaigns</RouterLink>
           </li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">

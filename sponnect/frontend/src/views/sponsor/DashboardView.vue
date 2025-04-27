@@ -6,6 +6,25 @@ const loading = ref(true)
 const campaigns = ref([])
 const adRequests = ref([])
 const error = ref('')
+const stats = ref({})
+
+// Format date for better display
+const formatDate = (dateString) => {
+  if (!dateString) return 'N/A'
+  
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'N/A'
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  } catch (e) {
+    return 'N/A'
+  }
+}
 
 onMounted(async () => {
   try {
@@ -122,20 +141,18 @@ onMounted(async () => {
                 <tbody>
                   <tr v-for="campaign in campaigns.slice(0, 5)" :key="campaign.id">
                     <td>{{ campaign.name }}</td>
-                    <td>${{ campaign.budget.toLocaleString() }}</td>
+                    <td>₹{{ campaign.budget.toLocaleString() }}</td>
                     <td>
-                      <span 
-                        :class="{
-                          'badge rounded-pill bg-success': campaign.visibility === 'public',
-                          'badge rounded-pill bg-secondary': campaign.visibility === 'private'
-                        }"
-                      >
-                        {{ campaign.visibility }}
+                      <span :class="{
+                        'badge rounded-pill bg-success': campaign.is_visible,
+                        'badge rounded-pill bg-secondary': !campaign.is_visible
+                      }">
+                        {{ campaign.is_visible ? 'Public' : 'Draft' }}
                       </span>
                     </td>
-                    <td>{{ new Date(campaign.created_at).toLocaleDateString() }}</td>
+                    <td>{{ formatDate(campaign.created_at) }}</td>
                     <td>
-                      <router-link :to="`/sponsor/campaigns/${campaign.id}`" class="btn btn-sm btn-outline-primary me-2">
+                      <router-link :to="`/sponsor/campaigns/${campaign.id}`" class="btn btn-sm btn-outline-primary">
                         View
                       </router-link>
                     </td>
@@ -164,18 +181,19 @@ onMounted(async () => {
               <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th>Influencer</th>
                     <th>Campaign</th>
+                    <th>Influencer</th>
                     <th>Payment</th>
                     <th>Status</th>
                     <th>Updated</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="request in adRequests.slice ? adRequests.slice(0, 5) : []" :key="request.id">
-                    <td>{{ request.influencer_name }}</td>
+                  <tr v-for="request in adRequests.slice(0, 5)" :key="request.id">
                     <td>{{ request.campaign_name }}</td>
-                    <td>${{ request.payment_amount ? request.payment_amount.toLocaleString() : '0' }}</td>
+                    <td>{{ request.influencer_name }}</td>
+                    <td>₹{{ request.payment_amount.toLocaleString() }}</td>
                     <td>
                       <span 
                         :class="{
@@ -188,7 +206,12 @@ onMounted(async () => {
                         {{ request.status }}
                       </span>
                     </td>
-                    <td>{{ request.updated_at ? new Date(request.updated_at).toLocaleDateString() : 'N/A' }}</td>
+                    <td>{{ formatDate(request.updated_at) }}</td>
+                    <td>
+                      <router-link :to="`/sponsor/ad-requests/${request.id}`" class="btn btn-sm btn-outline-primary">
+                        View
+                      </router-link>
+                    </td>
                   </tr>
                 </tbody>
               </table>

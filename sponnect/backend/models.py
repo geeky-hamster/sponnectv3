@@ -1,6 +1,8 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+from sqlalchemy.orm import validates
+from constants import INDUSTRIES, CATEGORIES, INFLUENCER_CATEGORIES, DEFAULT_CATEGORY
 
 db = SQLAlchemy()
 
@@ -36,6 +38,25 @@ class User(db.Model):
     ad_requests_initiated = db.relationship('AdRequest', back_populates='initiating_user', lazy='dynamic',
                                            foreign_keys='AdRequest.initiator_id')
 
+    # Simple validation of role and industry values
+    @validates('role')
+    def validate_role(self, key, role):
+        assert role in ['influencer', 'sponsor', 'admin']
+        return role
+        
+    @validates('industry')
+    def validate_industry(self, key, industry):
+        if industry is not None and industry != '':
+            assert industry in INDUSTRIES, f"Invalid industry: {industry}. Must be one of: {', '.join(INDUSTRIES)}"
+        return industry
+        
+    @validates('category')
+    def validate_category(self, key, category):
+        if category is not None and category != '':
+            if self.role == 'influencer':
+                assert category in INFLUENCER_CATEGORIES, f"Invalid influencer category: {category}. Must be one of: {', '.join(INFLUENCER_CATEGORIES)}"
+        return category
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -54,6 +75,7 @@ class Campaign(db.Model):
     end_date = db.Column(db.DateTime, nullable=True)
     budget = db.Column(db.Float, nullable=False)
     visibility = db.Column(db.String(10), nullable=False, default='private', index=True) # 'public', 'private'
+    category = db.Column(db.String(50), nullable=True)  # Match category with sponsor's category
     goals = db.Column(db.Text, nullable=True)
     is_flagged = db.Column(db.Boolean, default=False, nullable=False) # For admin flagging
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -63,6 +85,17 @@ class Campaign(db.Model):
     sponsor = db.relationship('User', back_populates='campaigns', foreign_keys=[sponsor_id])
     ad_requests = db.relationship('AdRequest', back_populates='campaign', lazy='dynamic',
                                   cascade="all, delete-orphan")
+
+    @validates('category')
+    def validate_category(self, key, category):
+        if category is not None and category != '':
+            assert category in CATEGORIES, f"Invalid campaign category: {category}. Must be one of: {', '.join(CATEGORIES)}"
+        return category
+        
+    @validates('visibility')
+    def validate_visibility(self, key, visibility):
+        assert visibility in ['public', 'private']
+        return visibility
 
     def __repr__(self):
         return f'<Campaign {self.name}>'

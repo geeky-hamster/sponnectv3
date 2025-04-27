@@ -15,6 +15,7 @@ from sqlalchemy import extract, case, text, or_, and_
 
 from config import Config
 from models import db, User, Campaign, AdRequest, Payment, NegotiationHistory, ProgressUpdate
+from constants import INDUSTRY_TO_CATEGORY, DEFAULT_CATEGORY, map_industry_to_category, CATEGORIES, INDUSTRIES, INFLUENCER_CATEGORIES
 
 # --- App Initialization ---
 app = Flask(__name__, static_folder='../frontend/dist', static_url_path='/')
@@ -202,6 +203,7 @@ def serialize_campaign_detail(campaign):
         'description': campaign.description, 
         'goals': campaign.goals, 
         'sponsor_id': campaign.sponsor_id,
+        'category': campaign.category,
         'start_date': format_date(campaign.start_date) if campaign.start_date else None,
         'end_date': format_date(campaign.end_date) if campaign.end_date else None,
         'created_at': format_datetime(campaign.created_at) if campaign.created_at else None,
@@ -304,75 +306,139 @@ def create_admin_command():
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
-    username = data.get('username')
-    email = data.get('email')
-    password = data.get('password')
-    role = data.get('role', 'influencer')  # Defaults to influencer
-
-    if not username or not password or not email:  # Require email now
-        return jsonify({"message": "Username, email, and password are required"}), 400
-
-    if User.query.filter_by(username=username).first():
-        return jsonify({"message": "Username already exists"}), 409
-
-    if User.query.filter_by(email=email).first():  # Check for existing email
-        return jsonify({"message": "Email already exists"}), 409
-
-    if role not in ['influencer', 'sponsor']:
-        return jsonify({"message": "Invalid role"}), 400
-
-    user = User(username=username, email=email, role=role)  # Store email!
-    user.set_password(password)  # Ensure proper password hashing (see previous responses)
-    message = ""
-
-    if role == 'sponsor':
-        user.company_name = data.get('company_name')
-        user.industry = data.get('industry')
-        user.sponsor_approved = False  # Requires approval
-        message = "Sponsor registered. Account requires admin approval."
-    else:  # influencer
-        user.influencer_name = data.get('influencer_name')
-        user.category = data.get('category')
-        user.niche = data.get('niche')
-        user.reach = data.get('reach')
-        user.influencer_approved = False  # Requires approval
-        message = "Influencer registered. Account requires admin approval."
-
-    db.session.add(user)
-    db.session.commit()
-    return jsonify({"message": message, "user_id": user.id}), 201  # Return user ID
+    
+    # Validate required fields
+    required_fields = ['username', 'email', 'password', 'role']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({'message': f'Missing required field: {field}'}), 400
+    
+    # Check if username or email already exists
+    if User.query.filter_by(username=data['username']).first():
+        return jsonify({'message': 'Username already exists'}), 400
+    
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'message': 'Email already exists'}), 400
+    
+    # Validate role
+    if data['role'] not in ['sponsor', 'influencer']:
+        return jsonify({'message': 'Invalid role'}), 400
+    
+    # Create new user
+    new_user = User(
+        username=data['username'],
+        email=data['email'],
+        role=data['role']
+    )
+    new_user.set_password(data['password'])
+    
+    # Additional fields for sponsor
+    if data['role'] == 'sponsor':
+        if 'company_name' not in data:
+            return jsonify({'message': 'Company name is required for sponsors'}), 400
+        
+        new_user.company_name = data['company_name']
+        
+        # Optional fields
+        new_user.industry = data.get('industry', '')
+        
+        # Start as pending approval
+        new_user.sponsor_approved = None
+    
+    # Additional fields for influencer
+    elif data['role'] == 'influencer':
+        if 'influencer_name' not in data:
+            return jsonify({'message': 'Influencer name is required'}), 400
+        
+        new_user.influencer_name = data['influencer_name']
+        
+        # Optional fields with defaults
+        new_user.category = data.get('category', 'Other')
+        new_user.niche = data.get('niche', '')
+        new_user.bio = data.get('bio', '')
+        new_user.reach = int(data.get('reach', 0))
+        
+        # Start as pending approval
+        new_user.influencer_approved = None
+    
+    try:
+        db.session.add(new_user)
+        db.session.commit()
+        
+        # Send registration pending notification
+        from user_notifications import send_registration_pending_notification
+        send_registration_pending_notification.delay(new_user.id)
+        
+        return jsonify({
+            'message': 'User registered successfully. Account is pending approval.',
+            'user_id': new_user.id
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error creating user: {str(e)}'}), 500
 
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
-    username = data.get('username')
-    email = data.get('email')  # Get email separately
-    password = data.get('password')
-
-    if not password:
-        return jsonify({"message": "Password is required"}), 400
-
-    if username:
-        user = User.query.filter_by(username=username).first()
-    elif email:
-        user = User.query.filter_by(email=email).first()
-    else:
-        return jsonify({"message": "Username or email is required"}), 400 # More specific
-
-    if not user or not user.check_password(password):
-        return jsonify({"message": "Invalid credentials"}), 401
-
-    if not user.is_active:
-        return jsonify({"message": "Account deactivated"}), 403
+    
+    if not data:
+        return jsonify({"message": "Missing JSON in request"}), 400
         
-    # Check approval status based on role
-    if user.role == 'sponsor' and not user.sponsor_approved:
-        return jsonify({"message": "Sponsor account pending approval"}), 403
-    elif user.role == 'influencer' and not user.influencer_approved:
-        return jsonify({"message": "Influencer account pending approval"}), 403
-
-    access_token = create_access_token(identity=user.id, additional_claims={'role': user.role})
-    return jsonify(access_token=access_token, user_role=user.role), 200
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({"message": "Username and password are required"}), 400
+        
+    user = User.query.filter_by(username=username).first()
+    
+    if not user or not user.check_password(password):
+        return jsonify({"message": "Invalid username or password"}), 401
+        
+    # Check if user is active
+    if not getattr(user, 'is_active', True):
+        return jsonify({"message": "Account is disabled. Please contact support."}), 403
+    
+    # Check role-specific approval requirements
+    if user.role == 'sponsor' and user.sponsor_approved is False:
+        return jsonify({"message": "Your sponsor account has been rejected. Please contact support."}), 403
+    
+    if user.role == 'influencer' and user.influencer_approved is False:
+        return jsonify({"message": "Your influencer account has been rejected. Please contact support."}), 403
+    
+    if (user.role == 'sponsor' and user.sponsor_approved is None) or \
+       (user.role == 'influencer' and user.influencer_approved is None):
+        return jsonify({"message": "Your account is pending approval"}), 403
+    
+    # Create access token with role in additional_claims
+    expires = datetime.utcnow() + timedelta(days=1)
+    # Add 'role' to the token's claims to match what the decorator expects
+    additional_claims = {"role": user.role}
+    access_token = create_access_token(
+        identity=user.id, 
+        expires_delta=expires - datetime.utcnow(),
+        additional_claims=additional_claims
+    )
+    
+    # Update last login time
+    user.last_login = datetime.utcnow()
+    db.session.commit()
+    
+    # Send login stats to the user's email
+    from user_notifications import send_login_stats
+    send_login_stats.delay(user.id)
+    
+    return jsonify({
+        "message": "Login successful",
+        "access_token": access_token,
+        "user_role": user.role,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role
+        }
+    }), 200
 
 
 
@@ -395,8 +461,28 @@ def update_profile():
     data = request.get_json()
     # Update fields based on role - prevent users from changing role/approval status
     if user.role == 'sponsor':
+        # Check if industry is being changed
+        industry_changed = 'industry' in data and data['industry'] != user.industry
+        old_industry = user.industry
+        
+        # Update sponsor fields
         user.company_name = data.get('company_name', user.company_name)
         user.industry = data.get('industry', user.industry)
+        
+        # If industry changed, update all campaign categories
+        if industry_changed and user.industry:
+            # Get all campaigns for this sponsor
+            campaigns = Campaign.query.filter_by(sponsor_id=user_id).all()
+            
+            # Update all campaigns with the new category based on industry
+            new_category = map_industry_to_category(user.industry)
+            for campaign in campaigns:
+                # Only update campaigns that haven't been explicitly categorized
+                # or have the old category derived from the old industry
+                old_category = map_industry_to_category(old_industry)
+                if not campaign.category or campaign.category == old_category:
+                    campaign.category = new_category
+    
     elif user.role == 'influencer':
         user.influencer_name = data.get('influencer_name', user.influencer_name)
         user.category = data.get('category', user.category)
@@ -498,25 +584,41 @@ def admin_get_pending_users():
 @jwt_required()
 @admin_required
 def admin_approve_sponsor(sponsor_id):
-    sponsor = db.session.get(User, sponsor_id)
-    if not sponsor or sponsor.role != 'sponsor': return jsonify({"message": "Sponsor not found"}), 404
-    if sponsor.sponsor_approved is True: return jsonify({"message": "Sponsor already approved"}), 400
+    sponsor = User.query.filter_by(id=sponsor_id, role='sponsor').first()
+    
+    if not sponsor:
+        return jsonify({"message": "Sponsor not found"}), 404
+        
     sponsor.sponsor_approved = True
-    sponsor.is_active = True # Ensure active on approval
+    sponsor.is_active = True  # Also activate the account
+    
     db.session.commit()
-    return jsonify({"message": "Sponsor approved"}), 200
+    
+    # Send account approval notification
+    from user_notifications import send_account_approval_notification
+    send_account_approval_notification.delay(sponsor.id)
+    
+    return jsonify({"message": "Sponsor approved successfully"}), 200
 
 @app.route('/api/admin/influencers/<int:influencer_id>/approve', methods=['PATCH'])
 @jwt_required()
 @admin_required
 def admin_approve_influencer(influencer_id):
-    influencer = db.session.get(User, influencer_id)
-    if not influencer or influencer.role != 'influencer': return jsonify({"message": "Influencer not found"}), 404
-    if influencer.influencer_approved is True: return jsonify({"message": "Influencer already approved"}), 400
+    influencer = User.query.filter_by(id=influencer_id, role='influencer').first()
+    
+    if not influencer:
+        return jsonify({"message": "Influencer not found"}), 404
+        
     influencer.influencer_approved = True
-    influencer.is_active = True # Ensure active on approval
+    influencer.is_active = True  # Also activate the account
+    
     db.session.commit()
-    return jsonify({"message": "Influencer approved"}), 200
+    
+    # Send account approval notification
+    from user_notifications import send_account_approval_notification
+    send_account_approval_notification.delay(influencer.id)
+    
+    return jsonify({"message": "Influencer approved successfully"}), 200
 
 @app.route('/api/admin/sponsors/<int:sponsor_id>/reject', methods=['PATCH'])
 @jwt_required()
@@ -631,8 +733,16 @@ def sponsor_create_campaign():
         if data['visibility'] not in ['public', 'private']: raise ValueError("Invalid visibility")
     except (ValueError, TypeError): return jsonify({"message": "Invalid date, budget, or visibility"}), 400
 
+    # Get sponsor to inherit category based on industry
+    sponsor = db.session.get(User, sponsor_id)
+    
+    # Use provided category if available, otherwise map from industry
+    category = data.get('category')
+    if not category and sponsor and sponsor.industry:
+        category = map_industry_to_category(sponsor.industry)
+
     campaign = Campaign(sponsor_id=sponsor_id, name=data['name'], budget=budget, start_date=start_date,
-                        end_date=end_date, visibility=data['visibility'],
+                        end_date=end_date, visibility=data['visibility'], category=category,
                         description=data.get('description'), goals=data.get('goals'))
     db.session.add(campaign); db.session.commit()
     return jsonify({"message": "Campaign created", "campaign": serialize_campaign_detail(campaign)}), 201
@@ -667,6 +777,19 @@ def sponsor_update_campaign(campaign_id):
     if 'description' in data: campaign.description = data['description']
     if 'goals' in data: campaign.goals = data['goals']
     if 'visibility' in data and data['visibility'] in ['public', 'private']: campaign.visibility = data['visibility']
+    
+    # Update category if provided, otherwise keep existing or inherit from sponsor if null
+    if 'category' in data:
+        if data['category']:
+            campaign.category = data['category']
+        elif data['category'] is None:
+            # Inherit from sponsor if explicitly setting to null
+            sponsor = db.session.get(User, sponsor_id)
+            if sponsor and sponsor.industry:
+                campaign.category = map_industry_to_category(sponsor.industry)
+            else:
+                campaign.category = DEFAULT_CATEGORY
+            
     if 'budget' in data:
         try: campaign.budget = float(data['budget'])
         except (ValueError, TypeError): pass # ignore invalid budget on update
@@ -778,8 +901,8 @@ def sponsor_get_all_ad_requests():
                 "payment_amount_formatted": format_currency(ar.payment_amount),
                 "last_offer_by": ar.last_offer_by,
                 "requirements": ar.requirements,
-                "created_at": format_datetime(ar.created_at),
-                "updated_at": format_datetime(ar.updated_at),
+                "created_at": format_datetime(ar.created_at) if ar.created_at else None,
+                "updated_at": format_datetime(ar.updated_at) if ar.updated_at else None,
                 "created_at_iso": ar.created_at.isoformat() if ar.created_at else None,
                 "updated_at_iso": ar.updated_at.isoformat() if ar.updated_at else None
             }
@@ -821,7 +944,7 @@ def sponsor_get_ad_request(ad_request_id):
                 "requirements": neg.requirements,
                 "actor": neg.user_role,
                 "actor_name": neg.user.username if neg.user else "Unknown User",
-                "created_at": format_datetime(neg.created_at),
+                "created_at": format_datetime(neg.created_at) if neg.created_at else None,
                 "created_at_iso": neg.created_at.isoformat() if neg.created_at else None
             } for neg in negotiations
         ]
@@ -856,8 +979,8 @@ def sponsor_get_ad_request(ad_request_id):
             "last_offer_by": ad_request.last_offer_by,
             "requirements": ad_request.requirements,
             "message": ad_request.message,
-            "created_at": format_datetime(ad_request.created_at),
-            "updated_at": format_datetime(ad_request.updated_at),
+            "created_at": format_datetime(ad_request.created_at) if ad_request.created_at else None,
+            "updated_at": format_datetime(ad_request.updated_at) if ad_request.updated_at else None,
             "created_at_iso": ad_request.created_at.isoformat() if ad_request.created_at else None,
             "updated_at_iso": ad_request.updated_at.isoformat() if ad_request.updated_at else None,
             "negotiation_history": negotiation_history,
@@ -1114,7 +1237,10 @@ def influencer_apply_campaign(campaign_id):
 def search_influencers():
     query = User.query.filter_by(role='influencer', is_active=True, is_flagged=False) # Exclude flagged
     if niche := request.args.get('niche'): query = query.filter(User.niche.ilike(f'%{niche}%'))
-    if category := request.args.get('category'): query = query.filter(User.category == category)
+    if category := request.args.get('category'): 
+        # Validate the category is in our allowed list
+        if category in INFLUENCER_CATEGORIES:
+            query = query.filter(User.category == category)
     if reach_min_str := request.args.get('reach_min'):
         try: query = query.filter(User.reach >= int(reach_min_str))
         except (ValueError, TypeError): pass
@@ -1126,12 +1252,49 @@ def search_influencers():
 @jwt_required() # Any logged-in user can search public campaigns
 def search_campaigns():
     query = Campaign.query.filter_by(visibility='public', is_flagged=False) # Exclude flagged
+    
+    # Apply budget filter
     if budget_min_str := request.args.get('budget_min'):
          try: query = query.filter(Campaign.budget >= float(budget_min_str))
          except (ValueError, TypeError): pass
-    # Add other filters like category/niche if Campaigns get these fields later
-    # Add pagination later
-    campaigns = query.order_by(Campaign.created_at.desc()).limit(50).all()
+    if budget_max_str := request.args.get('budget_max'):
+         try: query = query.filter(Campaign.budget <= float(budget_max_str))
+         except (ValueError, TypeError): pass
+         
+    # Apply category filter
+    if category := request.args.get('category'):
+        # Validate the category is in our allowed list
+        if category in CATEGORIES:
+            query = query.filter(Campaign.category == category)
+    
+    # Apply text search filter
+    if search_text := request.args.get('query'):
+        query = query.filter(or_(
+            Campaign.name.ilike(f'%{search_text}%'),
+            Campaign.description.ilike(f'%{search_text}%')
+        ))
+    
+    # Apply sorting
+    sort_by = request.args.get('sort', 'latest')
+    if sort_by == 'oldest':
+        query = query.order_by(Campaign.created_at.asc())
+    elif sort_by == 'budget_high':
+        query = query.order_by(Campaign.budget.desc())
+    elif sort_by == 'budget_low':
+        query = query.order_by(Campaign.budget.asc())
+    else:  # default to 'latest'
+        query = query.order_by(Campaign.created_at.desc())
+        
+    # Get limit parameter with default value of 50
+    limit = 50
+    try:
+        limit_param = request.args.get('limit')
+        if limit_param:
+            limit = min(int(limit_param), 50)  # Cap at 50 max
+    except (ValueError, TypeError):
+        pass
+            
+    campaigns = query.limit(limit).all()
     return jsonify([serialize_campaign_detail(c) for c in campaigns]), 200
 
 # == ChartJS Data Endpoints ==
@@ -1917,20 +2080,35 @@ def influencer_add_progress_update(ad_request_id):
 def test_celery():
     """Endpoint for testing Celery integration"""
     data = request.get_json()
-    email = data.get('email')
+    email = data.get('email', get_jwt_identity())
     
-    if not email:
-        return jsonify({"message": "Email is required"}), 400
+    # Validate email
+    if not email or '@' not in email:
+        return jsonify({"error": "Valid email address is required"}), 400
     
-    # Import and trigger test email task
+    # Send a test email using Celery
     from task import send_test_email
     task = send_test_email.delay(email)
     
     return jsonify({
-        "message": "Test email task triggered",
+        "message": "Test task dispatched successfully",
+        "task_id": task.id
+    }), 202
+
+@app.route('/api/admin/test/reminder', methods=['POST'])
+@jwt_required()
+@admin_required
+def test_minute_reminder():
+    """Endpoint for testing the minute reminder Celery task"""
+    # Trigger the minute reminder task immediately
+    from task import send_minute_test_reminder
+    task = send_minute_test_reminder.delay()
+    
+    return jsonify({
+        "message": "Minute reminder test task dispatched successfully",
         "task_id": task.id,
-        "status": "Processing"
-    }), 200
+        "note": "Check Mailhog for the test email. The task is also scheduled to run every minute with Celery Beat."
+    }), 202
 
 # Add API endpoint for exporting user data
 @app.route('/api/admin/export/users', methods=['POST'])
@@ -1970,3 +2148,18 @@ def check_task_status(task_id):
         response["error"] = str(task.result)
     
     return jsonify(response), 200
+
+@app.route('/api/admin/test/activity-update', methods=['POST'])
+@jwt_required()
+@admin_required
+def test_activity_update():
+    """Endpoint for testing the minute activity update Celery task"""
+    # Trigger the minute activity update task immediately
+    from user_notifications import send_minute_activity_update
+    task = send_minute_activity_update.delay()
+    
+    return jsonify({
+        "message": "Activity update test task dispatched successfully",
+        "task_id": task.id,
+        "note": "Check Mailhog for the test emails. The task is also scheduled to run every minute with Celery Beat."
+    }), 202

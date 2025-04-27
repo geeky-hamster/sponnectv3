@@ -66,20 +66,29 @@ const loadAdRequest = async () => {
 // Format date
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'N/A'
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch (e) {
+    console.error('Error formatting date:', e)
+    return 'N/A'
+  }
 }
 
 // Format currency
 const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
     minimumFractionDigits: 0
   }).format(amount || 0)
 }
@@ -600,9 +609,9 @@ const enhancedLoadAdRequest = async () => {
               </div>
               
               <div v-if="newMessage.action === 'negotiate'" class="form-group mb-3 shadow-sm p-3 border rounded bg-light">
-                <label for="payment" class="form-label">Your Counter Offer (USD)</label>
+                <label for="payment" class="form-label">Your Counter Offer (₹)</label>
                 <div class="input-group">
-                  <span class="input-group-text">$</span>
+                  <span class="input-group-text">₹</span>
                   <input
                     id="payment"
                     type="number"
@@ -903,7 +912,7 @@ const enhancedLoadAdRequest = async () => {
             <div class="modal-body">
               <form @submit.prevent="submitPayment">
                 <div class="mb-3">
-                  <label for="paymentAmount" class="form-label">Payment Amount ($)</label>
+                  <label for="paymentAmount" class="form-label">Payment Amount (₹)</label>
                   <input 
                     type="number" 
                     id="paymentAmount" 
@@ -912,7 +921,7 @@ const enhancedLoadAdRequest = async () => {
                     min="1" 
                     step="0.01" 
                     required 
-                    :placeholder="'Agreed amount: $' + adRequest?.payment_amount"
+                    :placeholder="'Agreed amount: ₹' + adRequest?.payment_amount"
                   >
                   <div class="form-text">
                     Agreed payment amount: {{ formatCurrency(adRequest?.payment_amount) }}

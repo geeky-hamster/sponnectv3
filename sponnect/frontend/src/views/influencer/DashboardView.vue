@@ -7,6 +7,24 @@ const adRequests = ref([])
 const publicCampaigns = ref([])
 const error = ref('')
 
+// Format date for better display
+const formatDate = (dateString) => {
+  if (!dateString) return 'N/A'
+  
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'N/A'
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  } catch (e) {
+    return 'N/A'
+  }
+}
+
 onMounted(async () => {
   try {
     loading.value = true
@@ -119,7 +137,7 @@ onMounted(async () => {
                 <tbody>
                   <tr v-for="request in adRequests.slice ? adRequests.slice(0, 5) : []" :key="request.id">
                     <td>{{ request.campaign_name }}</td>
-                    <td>${{ request.payment_amount ? request.payment_amount.toLocaleString() : '0' }}</td>
+                    <td>₹{{ request.payment_amount ? request.payment_amount.toLocaleString() : '0' }}</td>
                     <td>
                       <span 
                         :class="{
@@ -132,7 +150,7 @@ onMounted(async () => {
                         {{ request.status }}
                       </span>
                     </td>
-                    <td>{{ request.updated_at ? new Date(request.updated_at).toLocaleDateString() : 'N/A' }}</td>
+                    <td>{{ formatDate(request.updated_at) }}</td>
                     <td>
                       <router-link :to="`/influencer/ad-requests/${request.id}`" class="btn btn-sm btn-outline-primary">
                         View
@@ -166,7 +184,7 @@ onMounted(async () => {
                     <h5 class="card-title">{{ campaign.name }}</h5>
                     <div class="d-flex justify-content-between mb-2">
                       <span class="text-muted">Budget:</span>
-                      <span class="fw-bold">${{ campaign.budget ? campaign.budget.toLocaleString() : '0' }}</span>
+                      <span class="fw-bold">₹{{ campaign.budget ? campaign.budget.toLocaleString() : '0' }}</span>
                     </div>
                     <p class="card-text mb-3">{{ campaign.description?.substring(0, 120) }}{{ campaign.description?.length > 120 ? '...' : '' }}</p>
                     <router-link :to="`/campaigns/${campaign.id}`" class="btn btn-outline-primary">

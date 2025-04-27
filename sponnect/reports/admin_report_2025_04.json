@@ -1,0 +1,80 @@
+{
+  "total_users": 31,
+  "new_users": 3,
+  "user_growth": 200.0,
+  "active_sponsors": 10,
+  "sponsor_growth": 11.1,
+  "active_influencers": 20,
+  "influencer_growth": 11.1,
+  "total_campaigns": 30,
+  "new_campaigns": 15,
+  "campaign_growth": 100.0,
+  "campaign_categories": [
+    {
+      "name": "gaming",
+      "count": 4,
+      "percentage": 13.3
+    },
+    {
+      "name": "other",
+      "count": 12,
+      "percentage": 40.0
+    },
+    {
+      "name": "technology",
+      "count": 2,
+      "percentage": 6.7
+    },
+    {
+      "name": "travel",
+      "count": 12,
+      "percentage": 40.0
+    }
+  ],
+  "total_ad_requests": 50,
+  "new_ad_requests": 42,
+  "ad_request_growth": 525.0,
+  "ad_request_statuses": [
+    {
+      "name": "Pending",
+      "count": 0,
+      "percentage": 0.0
+    },
+    {
+      "name": "Negotiating",
+      "count": 0,
+      "percentage": 0.0
+    },
+    {
+      "name": "Accepted",
+      "count": 0,
+      "percentage": 0.0
+    },
+    {
+      "name": "Rejected",
+      "count": 0,
+      "percentage": 0.0
+    },
+    {
+      "name": "Completed",
+      "count": 0,
+      "percentage": 0.0
+    }
+  ],
+  "total_payments": 24754.0,
+  "platform_fees": 1908.0,
+  "payment_growth": 0.0,
+  "platform_fee_percentage": 7.7,
+  "payment_types": [
+    {
+      "name": "Standard Campaigns",
+      "amount": 17327.8,
+      "percentage": 70
+    },
+    {
+      "name": "Premium Campaigns",
+      "amount": 7426.2,
+      "percentage": 30
+    }
+  ]
+}

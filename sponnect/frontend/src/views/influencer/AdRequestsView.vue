@@ -69,19 +69,26 @@ const loadAdRequests = async () => {
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
   
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'N/A'
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  } catch (e) {
+    console.error('Error formatting date:', e)
+    return 'N/A'
+  }
 }
 
 // Format currency
 const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
     minimumFractionDigits: 0
   }).format(amount || 0)
 }
@@ -198,60 +205,41 @@ onMounted(() => {
         </div>
       </div>
       
-      <!-- Request List -->
-      <div v-else class="row g-4">
-        <div v-for="request in filteredRequests" :key="request.id" class="col-md-6">
-          <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white border-0 py-3">
-              <div class="d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">{{ request.campaign_name }}</h5>
-                <span :class="`badge ${getStatusBadgeClass(request.status)}`">
+      <!-- Ad Requests Table -->
+      <div v-if="filteredRequests.length" class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Campaign</th>
+              <th>Offer Amount</th>
+              <th>Status</th>
+              <th>Last Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="request in filteredRequests" :key="request.id">
+              <td>{{ request.campaign_name || 'Unknown Campaign' }}</td>
+              <td>{{ formatCurrency(request.payment_amount) }}</td>
+              <td>
+                <span 
+                  :class="`badge rounded-pill ${getStatusBadgeClass(request.status)}`"
+                >
                   {{ request.status }}
                 </span>
-              </div>
-            </div>
-            <div class="card-body">
-              <div class="mb-3">
-                <div class="row mb-2">
-                  <div class="col-6">
-                    <span class="text-muted">Offer Amount:</span>
-                  </div>
-                  <div class="col-6 text-end">
-                    <span class="fw-bold">{{ formatCurrency(request.payment_amount) }}</span>
-                  </div>
-                </div>
-                <div class="row mb-2">
-                  <div class="col-6">
-                    <span class="text-muted">Last Updated:</span>
-                  </div>
-                  <div class="col-6 text-end">
-                    <span>{{ formatDate(request.updated_at) }}</span>
-                  </div>
-                </div>
-                <div class="row">
-                  <div class="col-6">
-                    <span class="text-muted">Last Action By:</span>
-                  </div>
-                  <div class="col-6 text-end">
-                    <span class="fst-italic">{{ request.last_offer_by || 'N/A' }}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <h6 class="fw-bold">Requirements:</h6>
-              <p class="mb-4">{{ request.requirements?.substring(0, 100) }}{{ request.requirements?.length > 100 ? '...' : '' }}</p>
-              
-              <div class="d-grid">
-                <RouterLink :to="`/influencer/ad-requests/${request.id}`" class="btn btn-primary">
+              </td>
+              <td>{{ formatDate(request.updated_at) }}</td>
+              <td>
+                <router-link 
+                  :to="`/influencer/ad-requests/${request.id}`" 
+                  class="btn btn-sm btn-outline-primary"
+                >
                   View Details
-                </RouterLink>
-              </div>
-            </div>
-            <div class="card-footer bg-white text-muted small py-2">
-              <i class="bi bi-calendar me-1"></i> Created: {{ formatDate(request.created_at) }}
-            </div>
-          </div>
-        </div>
+                </router-link>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       
       <!-- Help Box (Always visible) -->

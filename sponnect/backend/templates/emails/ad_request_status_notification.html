@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ad Request Status Update</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333333;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #3498db;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            padding: 20px;
+            border: 1px solid #eeeeee;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .ad-request-card {
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .campaign-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .detail {
+            margin-bottom: 5px;
+        }
+        .label {
+            font-weight: bold;
+            color: #555555;
+        }
+        .status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            color: white;
+        }
+        .status-pending {
+            background-color: #ffc107;
+            color: #333333;
+        }
+        .status-accepted {
+            background-color: #28a745;
+        }
+        .status-rejected {
+            background-color: #dc3545;
+        }
+        .status-completed {
+            background-color: #17a2b8;
+        }
+        .status-cancelled {
+            background-color: #6c757d;
+        }
+        .button {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .footer {
+            font-size: 12px;
+            color: #999999;
+            text-align: center;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Ad Request Status Update</h1>
+        </div>
+        
+        <div class="content">
+            <p>Hello {{ recipient_name }},</p>
+            
+            <p>There has been an update to your ad request for the campaign:</p>
+            
+            <div class="ad-request-card">
+                <div class="campaign-name">{{ ad_request.campaign.name }}</div>
+                
+                <div class="detail">
+                    <span class="label">Status:</span> 
+                    <span class="status status-{{ ad_request.status|lower }}">{{ ad_request.status }}</span>
+                </div>
+                
+                <div class="detail">
+                    <span class="label">Requested On:</span> {{ ad_request.created_at.strftime('%B %d, %Y') }}
+                </div>
+                
+                <div class="detail">
+                    <span class="label">{% if is_influencer %}Sponsor{% else %}Influencer{% endif %}:</span> 
+                    {% if is_influencer %}{{ ad_request.campaign.sponsor.company_name }}{% else %}{{ ad_request.influencer.influencer_name }}{% endif %}
+                </div>
+                
+                <div class="detail">
+                    <span class="label">Budget:</span> ₹{{ "{:,.2f}".format(ad_request.campaign.budget) }}
+                </div>
+                
+                {% if ad_request.message %}
+                <div class="detail" style="margin-top: 15px;">
+                    <span class="label">Message:</span><br>
+                    {{ ad_request.message }}
+                </div>
+                {% endif %}
+                
+                {% if ad_request.response_message %}
+                <div class="detail" style="margin-top: 15px;">
+                    <span class="label">Response:</span><br>
+                    {{ ad_request.response_message }}
+                </div>
+                {% endif %}
+            </div>
+            
+            <p>
+                {% if ad_request.status == 'Pending' %}
+                Your ad request is currently under review.
+                {% elif ad_request.status == 'Accepted' %}
+                Your ad request has been accepted! You can now proceed with the collaboration.
+                {% elif ad_request.status == 'Rejected' %}
+                Your ad request has been rejected. Please review the response for more details.
+                {% elif ad_request.status == 'Completed' %}
+                Your ad collaboration has been marked as completed. Thank you for using Sponnect!
+                {% elif ad_request.status == 'Cancelled' %}
+                This ad request has been cancelled.
+                {% endif %}
+            </p>
+            
+            <div style="text-align: center;">
+                <a href="{{ ad_request_url }}" class="button">View Ad Request Details</a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; {{ year }} Sponnect. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html> 

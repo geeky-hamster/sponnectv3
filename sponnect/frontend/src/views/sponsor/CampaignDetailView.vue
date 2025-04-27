@@ -78,9 +78,9 @@ const formatDate = (dateString) => {
 
 // Format currency
 const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
     minimumFractionDigits: 0
   }).format(amount || 0)
 }
@@ -704,9 +704,9 @@ onMounted(() => {
                         </div>
                         
                         <div v-if="negotiationForm.action === 'negotiate'" class="form-group mb-3 shadow-sm p-3 border rounded bg-light">
-                          <label for="payment_amount" class="form-label">Your Counter Offer (USD)</label>
+                          <label for="payment_amount" class="form-label">Your Counter Offer (₹)</label>
                           <div class="input-group">
-                            <span class="input-group-text">$</span>
+                            <span class="input-group-text">₹</span>
                             <input
                               id="payment_amount"
                               type="number"

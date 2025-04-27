@@ -3,7 +3,7 @@ from celery import Celery
 # Initialize celery app
 celery = Celery(
     'sponnect',
-    include=['task'],
+    include=['task', 'user_notifications'],
     broker='redis://localhost:6379/1',
     backend='redis://localhost:6379/2'
 )

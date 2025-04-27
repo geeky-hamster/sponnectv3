@@ -5,12 +5,12 @@
 /**
  * Format a currency value
  * @param {number} amount - Amount to format
- * @param {string} [currency='USD'] - Currency code
- * @param {string} [locale='en-US'] - Locale for formatting
+ * @param {string} [currency='INR'] - Currency code
+ * @param {string} [locale='en-IN'] - Locale for formatting
  * @param {number} [minimumFractionDigits=0] - Minimum number of fraction digits
  * @returns {string} Formatted currency string
  */
-export const formatCurrency = (amount, currency = 'USD', locale = 'en-US', minimumFractionDigits = 0) => {
+export const formatCurrency = (amount, currency = 'INR', locale = 'en-IN', minimumFractionDigits = 0) => {
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: currency,

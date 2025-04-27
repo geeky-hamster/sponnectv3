@@ -10,54 +10,47 @@ import uuid
 import json
 from sqlalchemy import desc, func
 from app import app as flask_app
-from user_notifications import (
-    send_minute_activity_update,
-    send_registration_pending_notification,
-    send_account_approval_notification,
-    send_login_stats,
-    notify_admin_pending_approvals
-)
 
 @celery.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
-    # Daily reminder for pending ad requests - now run every minute
+    # Daily reminder for pending ad requests - run at 9 AM every day
     sender.add_periodic_task(
-        60.0,  # Run every 60 seconds
+        crontab(hour=9, minute=0),
         send_pending_request_reminders.s(),
         name='send_pending_request_reminders'
     )
     
-    # Weekly summary for sponsors - now run every minute
+    # Weekly summary for sponsors - run every Monday at 7 AM
     sender.add_periodic_task(
-        60.0,  # Run every 60 seconds
+        crontab(day_of_week=1, hour=7, minute=0),
         send_weekly_sponsor_summary.s(),
         name='send_weekly_sponsor_summary'
     )
     
-    # Monthly analytics report for admins - now run every minute
+    # Monthly analytics report for admins - run 1st day of month at 6 AM
     sender.add_periodic_task(
-        60.0,  # Run every 60 seconds
+        crontab(day_of_month=1, hour=6, minute=0),
         send_monthly_admin_report.s(),
         name='send_monthly_admin_report'
     )
     
-    # Check for stale ad requests - now run every minute
+    # Check for stale ad requests daily at 1 AM
     sender.add_periodic_task(
-        60.0,  # Run every 60 seconds
+        crontab(hour=1, minute=0),
         check_stale_ad_requests.s(),
         name='check_stale_ad_requests'
     )
     
-    # Test minute activity update - already runs every minute
+    # Test minute reminder - runs every minute for testing Celery Beat with Mailhog
     sender.add_periodic_task(
         60.0,  # Run every 60 seconds
-        send_minute_activity_update.s(),
-        name='send_minute_activity_update'
+        send_minute_test_reminder.s(),
+        name='send_minute_test_reminder'
     )
     
-    # Daily check for pending user approvals - now run every minute
+    # Daily check for pending registrations - run at 10 AM every day
     sender.add_periodic_task(
-        60.0,  # Run every 60 seconds
+        crontab(hour=10, minute=0),
         notify_admin_pending_approvals.s(),
         name='notify_admin_pending_approvals'
     )
@@ -243,37 +236,15 @@ def send_weekly_sponsor_summary():
         
         # Only send email if there's activity
         if total_ad_requests > 0 or new_ad_requests > 0 or accepted_requests > 0 or completed_updates > 0:
-            # Get top campaigns by ad requests
-            top_campaigns = sorted(campaign_stats, key=lambda x: x['all_requests'], reverse=True)[:3]
-            top_campaigns = [cs['campaign'] for cs in top_campaigns]
-            
-            # Get recent ad requests
-            recent_ad_requests = AdRequest.query.join(Campaign).filter(
-                Campaign.sponsor_id == sponsor.id,
-                AdRequest.created_at >= one_week_ago
-            ).order_by(AdRequest.created_at.desc()).limit(5).all()
-            
-            # Generate recommendations based on campaign performance
-            recommendations = []
-            if not new_ad_requests and total_ad_requests > 0:
-                recommendations.append("Consider updating your campaign descriptions to attract more influencers.")
-            if accepted_requests > 0 and completed_updates == 0:
-                recommendations.append("Follow up with influencers who have accepted but haven't submitted progress.")
-                
             html_content = render_template(
                 'emails/weekly_sponsor_summary.html',
                 sponsor=sponsor,
-                period_start=one_week_ago,
-                period_end=now,
-                active_campaigns=len(campaigns),
-                new_requests=new_ad_requests,
+                campaign_stats=campaign_stats,
+                total_ad_requests=total_ad_requests,
+                new_ad_requests=new_ad_requests,
                 accepted_requests=accepted_requests,
-                completed_collaborations=completed_updates,
-                top_campaigns=top_campaigns,
-                recent_ad_requests=recent_ad_requests,
-                recommendations=recommendations,
-                dashboard_url="https://sponnect.com/sponsor/dashboard",
-                year=now.year
+                completed_updates=completed_updates,
+                date_range=f"{one_week_ago.strftime('%b %d, %Y')} - {now.strftime('%b %d, %Y')}"
             )
             
             send_email(
@@ -315,25 +286,7 @@ def send_monthly_admin_report():
     
     # Role breakdown
     sponsors_count = User.query.filter_by(role='sponsor').count()
-    active_sponsors = User.query.filter_by(role='sponsor', is_active=True).count()
     influencers_count = User.query.filter_by(role='influencer').count()
-    active_influencers = User.query.filter_by(role='influencer', is_active=True).count()
-    
-    # Growth calculations
-    user_growth = ((new_users_this_month - new_users_prev_month) / max(new_users_prev_month, 1)) * 100
-    
-    # Get previous month counts for growth calculations
-    prev_month_sponsors = User.query.filter(
-        User.role == 'sponsor',
-        User.created_at < first_day_of_month
-    ).count()
-    prev_month_influencers = User.query.filter(
-        User.role == 'influencer',
-        User.created_at < first_day_of_month
-    ).count()
-    
-    sponsor_growth = ((active_sponsors - prev_month_sponsors) / max(prev_month_sponsors, 1)) * 100
-    influencer_growth = ((active_influencers - prev_month_influencers) / max(prev_month_influencers, 1)) * 100
     
     # Campaign stats
     total_campaigns = Campaign.query.count()
@@ -343,28 +296,6 @@ def send_monthly_admin_report():
     ).count()
     active_campaigns = Campaign.query.filter_by(visibility='public').count()
     
-    # Get previous month campaign count
-    prev_month_campaigns = Campaign.query.filter(
-        Campaign.created_at < first_day_of_month
-    ).count()
-    campaign_growth = ((total_campaigns - prev_month_campaigns) / max(prev_month_campaigns, 1)) * 100
-    
-    # Campaign categories
-    campaign_categories = []
-    categories_data = db.session.query(
-        Campaign.category, func.count(Campaign.id)
-    ).group_by(Campaign.category).all()
-    
-    for category, count in categories_data:
-        if not category:
-            category = "Uncategorized"
-        percentage = (count / max(total_campaigns, 1)) * 100
-        campaign_categories.append({
-            "name": category,
-            "count": count,
-            "percentage": round(percentage, 1)
-        })
-    
     # Ad request stats
     total_ad_requests = AdRequest.query.count()
     new_ad_requests_this_month = AdRequest.query.filter(
@@ -372,22 +303,9 @@ def send_monthly_admin_report():
         AdRequest.created_at < now
     ).count()
     
-    # Get previous month ad request count
-    prev_month_ad_requests = AdRequest.query.filter(
-        AdRequest.created_at < first_day_of_month
-    ).count()
-    ad_request_growth = ((total_ad_requests - prev_month_ad_requests) / max(prev_month_ad_requests, 1)) * 100
-    
-    # Ad request statuses
-    ad_request_statuses = []
+    ad_requests_by_status = {}
     for status in ['pending', 'negotiating', 'accepted', 'rejected', 'completed']:
-        count = AdRequest.query.filter_by(status=status).count()
-        percentage = (count / max(total_ad_requests, 1)) * 100
-        ad_request_statuses.append({
-            "name": status.capitalize(),
-            "count": count,
-            "percentage": round(percentage, 1)
-        })
+        ad_requests_by_status[status] = AdRequest.query.filter_by(status=status).count()
     
     # Payment stats
     total_payments = db.session.query(func.sum(Payment.amount)).scalar() or 0
@@ -404,51 +322,34 @@ def send_monthly_admin_report():
         Payment.created_at < now
     ).scalar() or 0
     
-    # Get previous month payment data
-    prev_month_payments = db.session.query(func.sum(Payment.amount)).filter(
-        Payment.created_at >= first_day_of_prev_month,
-        Payment.created_at < first_day_of_month
-    ).scalar() or 0
-    
-    payment_growth = ((payments_this_month - prev_month_payments) / max(prev_month_payments, 1)) * 100
-    platform_fee_percentage = (total_platform_fees / max(total_payments, 1)) * 100
-    
-    # Payment types
-    payment_types = [
-        {
-            "name": "Standard Campaigns", 
-            "amount": total_payments * 0.7,  # Placeholder - replace with actual query
-            "percentage": 70
+    # Compile statistics
+    report_data = {
+        'date_range': f"{first_day_of_month.strftime('%B %Y')}",
+        'generated_at': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'user_stats': {
+            'total_users': total_users,
+            'new_users_this_month': new_users_this_month,
+            'new_users_prev_month': new_users_prev_month,
+            'user_growth_rate': ((new_users_this_month - new_users_prev_month) / max(new_users_prev_month, 1)) * 100,
+            'sponsors_count': sponsors_count,
+            'influencers_count': influencers_count
         },
-        {
-            "name": "Premium Campaigns",
-            "amount": total_payments * 0.3,  # Placeholder - replace with actual query
-            "percentage": 30
+        'campaign_stats': {
+            'total_campaigns': total_campaigns,
+            'new_campaigns_this_month': new_campaigns_this_month,
+            'active_campaigns': active_campaigns
+        },
+        'ad_request_stats': {
+            'total_ad_requests': total_ad_requests,
+            'new_ad_requests_this_month': new_ad_requests_this_month,
+            'by_status': ad_requests_by_status
+        },
+        'payment_stats': {
+            'total_payments': total_payments,
+            'total_platform_fees': total_platform_fees,
+            'payments_this_month': payments_this_month,
+            'fees_this_month': fees_this_month
         }
-    ]
-    
-    # Prepare stats object for template
-    stats = {
-        'total_users': total_users,
-        'new_users': new_users_this_month,
-        'user_growth': round(user_growth, 1),
-        'active_sponsors': active_sponsors,
-        'sponsor_growth': round(sponsor_growth, 1),
-        'active_influencers': active_influencers,
-        'influencer_growth': round(influencer_growth, 1),
-        'total_campaigns': total_campaigns,
-        'new_campaigns': new_campaigns_this_month,
-        'campaign_growth': round(campaign_growth, 1),
-        'campaign_categories': campaign_categories,
-        'total_ad_requests': total_ad_requests,
-        'new_ad_requests': new_ad_requests_this_month,
-        'ad_request_growth': round(ad_request_growth, 1),
-        'ad_request_statuses': ad_request_statuses,
-        'total_payments': total_payments,
-        'platform_fees': total_platform_fees,
-        'payment_growth': round(payment_growth, 1),
-        'platform_fee_percentage': round(platform_fee_percentage, 1),
-        'payment_types': payment_types
     }
     
     results = []
@@ -458,10 +359,7 @@ def send_monthly_admin_report():
         html_content = render_template(
             'emails/monthly_admin_report.html',
             admin=admin,
-            stats=stats,
-            month_name=first_day_of_month.strftime('%B'),
-            year=first_day_of_month.year,
-            generation_date=now.strftime('%Y-%m-%d %H:%M:%S')
+            report=report_data
         )
         
         send_email(
@@ -478,7 +376,7 @@ def send_monthly_admin_report():
     
     report_file = os.path.join(reports_dir, f"admin_report_{first_day_of_month.strftime('%Y_%m')}.json")
     with open(report_file, 'w') as f:
-        json.dump(stats, f, indent=2, default=str)
+        json.dump(report_data, f, indent=2, default=str)
     
     results.append(f"Monthly report saved to {report_file}")
     

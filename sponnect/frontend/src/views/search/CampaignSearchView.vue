@@ -24,13 +24,19 @@ const filters = reactive({
 // Categories
 const categories = [
   { id: '', name: 'All Categories' },
-  { id: 'beauty', name: 'Beauty & Cosmetics' },
-  { id: 'fashion', name: 'Fashion & Apparel' },
-  { id: 'food', name: 'Food & Beverage' },
   { id: 'technology', name: 'Technology' },
+  { id: 'fashion', name: 'Fashion & Apparel' },
+  { id: 'beauty', name: 'Beauty & Cosmetics' },
+  { id: 'food', name: 'Food & Beverage' },
   { id: 'travel', name: 'Travel & Lifestyle' },
   { id: 'gaming', name: 'Gaming' },
   { id: 'fitness', name: 'Health & Fitness' },
+  { id: 'automotive', name: 'Automotive' },
+  { id: 'finance', name: 'Finance' },
+  { id: 'entertainment', name: 'Entertainment' },
+  { id: 'education', name: 'Education' },
+  { id: 'lifestyle', name: 'Lifestyle' },
+  { id: 'sports', name: 'Sports' },
   { id: 'other', name: 'Other' }
 ]
 
@@ -110,9 +116,9 @@ const resetFilters = () => {
 
 // Format currency
 const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
     minimumFractionDigits: 0
   }).format(amount || 0)
 }
@@ -125,6 +131,12 @@ const formatDate = (dateString) => {
     month: 'short',
     day: 'numeric'
   })
+}
+
+// Helper function to get category name
+const getCategoryName = (categoryId) => {
+  const category = categories.find(c => c.id === categoryId)
+  return category ? category.name : categoryId
 }
 
 // Watch for search query changes
@@ -205,7 +217,7 @@ onMounted(() => {
             <div class="col-md-3">
               <label class="form-label">Min Budget</label>
               <div class="input-group">
-                <span class="input-group-text">$</span>
+                <span class="input-group-text">₹</span>
                 <input 
                   type="number" 
                   class="form-control" 
@@ -218,7 +230,7 @@ onMounted(() => {
             <div class="col-md-3">
               <label class="form-label">Max Budget</label>
               <div class="input-group">
-                <span class="input-group-text">$</span>
+                <span class="input-group-text">₹</span>
                 <input 
                   type="number" 
                   class="form-control" 
@@ -308,7 +320,7 @@ onMounted(() => {
                 </div>
                 
                 <div class="mb-3">
-                  <span class="badge bg-light text-dark me-2">{{ campaign.category }}</span>
+                  <span class="badge bg-light text-dark me-2">{{ getCategoryName(campaign.category) }}</span>
                   <span class="badge bg-light text-dark">{{ formatDate(campaign.created_at) }}</span>
                 </div>
                 

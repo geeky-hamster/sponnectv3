@@ -29,13 +29,20 @@ const searchFilters = reactive({
 // Available categories for filtering
 const categories = [
   { id: '', name: 'All Categories' },
-  { id: 'beauty', name: 'Beauty & Cosmetics' },
-  { id: 'fashion', name: 'Fashion & Apparel' },
-  { id: 'food', name: 'Food & Beverage' },
+  { id: 'beauty', name: 'Beauty' },
+  { id: 'fashion', name: 'Fashion' },
+  { id: 'food', name: 'Food' },
   { id: 'technology', name: 'Technology' },
-  { id: 'travel', name: 'Travel & Lifestyle' },
+  { id: 'travel', name: 'Travel' },
   { id: 'gaming', name: 'Gaming' },
-  { id: 'fitness', name: 'Health & Fitness' },
+  { id: 'fitness', name: 'Fitness' },
+  { id: 'business', name: 'Business' },
+  { id: 'education', name: 'Education' },
+  { id: 'entertainment', name: 'Entertainment' },
+  { id: 'health', name: 'Health' },
+  { id: 'sports', name: 'Sports' },
+  { id: 'parenting', name: 'Parenting' },
+  { id: 'lifestyle', name: 'Lifestyle' },  
   { id: 'other', name: 'Other' }
 ]
 
@@ -121,9 +128,9 @@ const searchInfluencers = async () => {
 
 // Format currency
 const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
     minimumFractionDigits: 0
   }).format(amount || 0)
 }
@@ -375,13 +382,13 @@ onMounted(() => {
                 
                 <!-- Payment amount -->
                 <div class="mb-4">
-                  <label for="paymentAmount" class="form-label">Payment Amount ($)</label>
+                  <label for="paymentAmount" class="form-label">Payment Amount (₹)</label>
                   <input
                     type="number"
                     class="form-control"
                     id="paymentAmount"
                     v-model="form.payment_amount"
-                    placeholder="Enter amount in USD"
+                    placeholder="Enter amount in INR"
                     min="1"
                     step="1"
                   >

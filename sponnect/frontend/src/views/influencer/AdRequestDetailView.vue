@@ -108,21 +108,28 @@ const loadAdRequest = async () => {
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
   
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'N/A'
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch (e) {
+    console.error('Error formatting date:', e)
+    return 'N/A'
+  }
 }
 
 // Format currency
 const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
     minimumFractionDigits: 0
   }).format(amount || 0)
 }
@@ -576,9 +583,9 @@ const canRespond = computed(() => {
                     </div>
                     
                     <div v-if="form.action === 'negotiate'" class="form-group mb-3 shadow-sm p-3 border rounded bg-light">
-                      <label for="counterOffer" class="form-label">Your Counter Offer (USD)</label>
+                      <label for="counterOffer" class="form-label">Your Counter Offer (₹)</label>
                       <div class="input-group">
-                        <span class="input-group-text">$</span>
+                        <span class="input-group-text">₹</span>
                         <input 
                           type="number" 
                           id="counterOffer" 
@@ -945,7 +952,7 @@ const canRespond = computed(() => {
               <div v-if="form.action === 'negotiate'" class="mb-4">
                 <label for="counterOffer" class="form-label">Counter Offer Amount</label>
                 <div class="input-group">
-                  <span class="input-group-text">$</span>
+                  <span class="input-group-text">₹</span>
                   <input 
                     type="number" 
                     id="counterOffer" 

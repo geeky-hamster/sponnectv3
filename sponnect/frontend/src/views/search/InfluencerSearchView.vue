@@ -24,14 +24,21 @@ const searchFilters = reactive({
 // Available categories for filtering
 const categories = [
   { id: '', name: 'All Categories' },
-  { id: 'beauty', name: 'Beauty & Cosmetics' },
-  { id: 'fashion', name: 'Fashion & Apparel' },
-  { id: 'food', name: 'Food & Beverage' },
-  { id: 'technology', name: 'Technology' },
-  { id: 'travel', name: 'Travel & Lifestyle' },
-  { id: 'gaming', name: 'Gaming' },
-  { id: 'fitness', name: 'Health & Fitness' },
-  { id: 'other', name: 'Other' }
+  { id: 'Fashion', name: 'Fashion' },
+  { id: 'Beauty', name: 'Beauty' },
+  { id: 'Fitness', name: 'Fitness' },
+  { id: 'Travel', name: 'Travel' },
+  { id: 'Food', name: 'Food' },
+  { id: 'Technology', name: 'Technology' },
+  { id: 'Gaming', name: 'Gaming' },
+  { id: 'Lifestyle', name: 'Lifestyle' },
+  { id: 'Business', name: 'Business' },
+  { id: 'Education', name: 'Education' },
+  { id: 'Entertainment', name: 'Entertainment' },
+  { id: 'Health', name: 'Health' },
+  { id: 'Sports', name: 'Sports' },
+  { id: 'Parenting', name: 'Parenting' },
+  { id: 'Other', name: 'Other' }
 ]
 
 // Load initial influencers

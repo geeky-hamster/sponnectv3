@@ -85,18 +85,27 @@ const applyFilters = () => {
 // Format date for display
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
+  
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'N/A'
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  } catch (e) {
+    console.error('Error formatting date:', e)
+    return 'N/A'
+  }
 }
 
 // Format currency
 const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
     minimumFractionDigits: 0
   }).format(amount || 0)
 }
@@ -347,52 +356,39 @@ onMounted(() => {
               <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th>Influencer</th>
                     <th>Campaign</th>
-                    <th>Payment</th>
+                    <th>Influencer</th>
+                    <th>Offer Amount</th>
                     <th>Status</th>
-                    <th>Updated</th>
-                    <th>Last Action By</th>
+                    <th>Last Updated</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="request in filteredRequests" :key="request.id">
-                    <td>{{ request.influencer_name }}</td>
                     <td>{{ request.campaign_name }}</td>
+                    <td>{{ request.influencer_name }}</td>
                     <td>{{ formatCurrency(request.payment_amount) }}</td>
                     <td>
-                      <span 
-                        :class="{
-                          'badge rounded-pill bg-warning': request.status === 'Pending',
-                          'badge rounded-pill bg-info': request.status === 'Negotiating',
-                          'badge rounded-pill bg-success': request.status === 'Accepted',
-                          'badge rounded-pill bg-danger': request.status === 'Rejected'
-                        }"
-                      >
-                        {{ request.status }}
-                      </span>
-                      <i v-if="canRespond(request)" class="bi bi-exclamation-circle text-warning ms-1" 
-                         title="Action required"></i>
+                      <span class="badge rounded-pill" :class="{
+                        'bg-warning': request.status === 'Pending',
+                        'bg-info': request.status === 'Negotiating',
+                        'bg-success': request.status === 'Accepted',
+                        'bg-danger': request.status === 'Rejected'
+                      }">{{ request.status }}</span>
                     </td>
                     <td>{{ formatDate(request.updated_at) }}</td>
-                    <td>{{ request.last_offer_by }}</td>
                     <td>
-                      <div class="btn-group">
-                        <button @click="openAdRequestModal(request)" class="btn btn-sm btn-primary">
-                          <i class="bi bi-eye me-1"></i> View & Respond
-                        </button>
-                        <RouterLink :to="`/sponsor/ad-requests/${request.id}`" class="btn btn-sm btn-outline-primary">
-                          Details
-                        </RouterLink>
-                        <button 
-                          v-if="request.status === 'Pending' || request.status === 'Rejected'" 
-                          @click="deleteAdRequest(request.id)" 
-                          class="btn btn-sm btn-outline-danger"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      <router-link :to="`/sponsor/ad-requests/${request.id}`" class="btn btn-sm btn-outline-primary me-1">
+                        View
+                      </router-link>
+                      <button 
+                        v-if="request.status === 'Pending' || request.status === 'Rejected'"
+                        @click="deleteAdRequest(request.id)" 
+                        class="btn btn-sm btn-outline-danger"
+                      >
+                        <i class="bi bi-trash"></i>
+                      </button>
                     </td>
                   </tr>
                 </tbody>
@@ -547,9 +543,9 @@ onMounted(() => {
                       </div>
                       
                       <div v-if="negotiationForm.action === 'negotiate'" class="form-group mb-3 shadow-sm p-3 border rounded bg-light">
-                        <label for="payment_amount" class="form-label">Your Counter Offer (USD)</label>
+                        <label for="payment_amount" class="form-label">Your Counter Offer (₹)</label>
                         <div class="input-group">
-                          <span class="input-group-text">$</span>
+                          <span class="input-group-text">₹</span>
                           <input
                             id="payment_amount"
                             type="number"

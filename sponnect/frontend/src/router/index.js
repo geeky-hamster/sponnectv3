@@ -155,7 +155,7 @@ const router = createRouter({
     {
       path: '/search/campaigns',
       name: 'search-campaigns',
-      component: CampaignSearchView,
+      redirect: '/influencer/campaigns/browse',
       meta: { requiresAuth: true, role: 'influencer' }
     },
     

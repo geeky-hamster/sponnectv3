@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { influencerService } from '../../services/api'
+import { influencerService, searchService } from '../../services/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -17,6 +17,7 @@ const error = ref('')
 const successMessage = ref('')
 const selectedCampaign = ref(null)
 const showApplyModal = ref(false)
+let searchTimeout = null
 
 // Placeholder image as data URL
 const campaignPlaceholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIyNSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIyNSIgZmlsbD0iI2VlZWVlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMThweCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iIzU1NTU1NSI+Q2FtcGFpZ24gSW1hZ2U8L3RleHQ+PC9zdmc+'
@@ -30,15 +31,21 @@ const filters = reactive({
   sort: 'latest'
 })
 
-// Categories (to be replaced with actual categories from backend)
+// Categories
 const categories = [
-  { id: 'beauty', name: 'Beauty & Cosmetics' },
-  { id: 'fashion', name: 'Fashion & Apparel' },
-  { id: 'food', name: 'Food & Beverage' },
   { id: 'technology', name: 'Technology' },
+  { id: 'fashion', name: 'Fashion & Apparel' },
+  { id: 'beauty', name: 'Beauty & Cosmetics' },
+  { id: 'food', name: 'Food & Beverage' },
   { id: 'travel', name: 'Travel & Lifestyle' },
   { id: 'gaming', name: 'Gaming' },
   { id: 'fitness', name: 'Health & Fitness' },
+  { id: 'automotive', name: 'Automotive' },
+  { id: 'finance', name: 'Finance' },
+  { id: 'entertainment', name: 'Entertainment' },
+  { id: 'education', name: 'Education' },
+  { id: 'lifestyle', name: 'Lifestyle' },
+  { id: 'sports', name: 'Sports' },
   { id: 'other', name: 'Other' }
 ]
 
@@ -122,11 +129,38 @@ const loadCampaigns = async () => {
   }
 }
 
+// Search campaigns with all filters applied
+const searchCampaigns = async () => {
+  try {
+    loading.value = true
+    error.value = ''
+    
+    const response = await searchService.searchCampaigns({ 
+      query: filters.search,
+      category: filters.category,
+      minBudget: filters.minBudget || undefined,
+      maxBudget: filters.maxBudget || undefined,
+      sort: filters.sort
+    })
+    
+    campaigns.value = response.data || []
+    
+    if (campaigns.value.length === 0) {
+      error.value = 'No campaigns found matching your criteria. Try adjusting your filters.'
+    }
+  } catch (err) {
+    console.error('Failed to search campaigns:', err)
+    error.value = 'Failed to search campaigns. Please try again.'
+  } finally {
+    loading.value = false
+  }
+}
+
 // Format currency
 const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
     minimumFractionDigits: 0
   }).format(amount || 0)
 }
@@ -262,14 +296,17 @@ const viewCampaignDetails = (campaign) => {
   openApplyModal(campaign)
 }
 
-// Watch for changes in the route params
-watch(() => route.params.id, (newId) => {
-  if (newId && campaigns.value.length) {
-    const campaignId = parseInt(newId)
-    const campaign = campaigns.value.find(c => c.id === campaignId)
-    if (campaign) {
-      openApplyModal(campaign)
-    }
+// Watch for search query changes to implement auto-search
+watch(() => filters.search, (newValue) => {
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
+  }
+  
+  if (newValue.length >= 3) {
+    // Debounce search for better UX
+    searchTimeout = setTimeout(() => {
+      searchCampaigns()
+    }, 500)
   }
 })
 
@@ -277,18 +314,33 @@ watch(() => route.params.id, (newId) => {
 onMounted(() => {
   loadCampaigns()
 })
+
+// Helper function to get category name
+const getCategoryName = (categoryId) => {
+  const category = categories.find(c => c.id === categoryId)
+  return category ? category.name : categoryId
+}
 </script>
 
 <template>
   <div class="campaign-browse-view py-5">
     <div class="container">
-      <h1 class="mb-4">{{ selectedCampaignId ? 'Campaign Details' : 'Browse Campaigns' }}</h1>
+      <!-- Header with breadcrumb -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ selectedCampaignId ? 'Campaign Details' : 'Browse & Search Campaigns' }}</h1>
+        <nav v-if="!selectedCampaignId" aria-label="breadcrumb">
+          <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><router-link to="/influencer/dashboard">Dashboard</router-link></li>
+            <li class="breadcrumb-item active">Browse & Search Campaigns</li>
+          </ol>
+        </nav>
+      </div>
       
-      <!-- Breadcrumbs navigation -->
+      <!-- Breadcrumbs navigation for campaign detail view -->
       <nav v-if="selectedCampaignId" aria-label="breadcrumb" class="mb-4">
         <ol class="breadcrumb">
           <li class="breadcrumb-item"><router-link to="/influencer/dashboard">Dashboard</router-link></li>
-          <li class="breadcrumb-item"><router-link to="/influencer/campaigns/browse">Browse Campaigns</router-link></li>
+          <li class="breadcrumb-item"><router-link to="/influencer/campaigns/browse">Browse & Search Campaigns</router-link></li>
           <li class="breadcrumb-item active">Campaign Details</li>
         </ol>
       </nav>
@@ -344,7 +396,7 @@ onMounted(() => {
                 <div class="col-6">
                   <label for="minBudget" class="form-label">Min Budget</label>
                   <div class="input-group">
-                    <span class="input-group-text">$</span>
+                    <span class="input-group-text">₹</span>
                     <input 
                       type="number" 
                       id="minBudget" 
@@ -358,7 +410,7 @@ onMounted(() => {
                 <div class="col-6">
                   <label for="maxBudget" class="form-label">Max Budget</label>
                   <div class="input-group">
-                    <span class="input-group-text">$</span>
+                    <span class="input-group-text">₹</span>
                     <input 
                       type="number" 
                       id="maxBudget" 
@@ -386,6 +438,9 @@ onMounted(() => {
             <div class="col-12 d-flex justify-content-end">
               <button class="btn btn-outline-secondary me-2" @click="resetFilters">
                 Reset Filters
+              </button>
+              <button class="btn btn-primary" @click="searchCampaigns">
+                <i class="bi bi-search me-1"></i> Search
               </button>
             </div>
           </div>
@@ -426,7 +481,7 @@ onMounted(() => {
             <div class="campaign-card-img" 
                  :style="{ backgroundImage: `url(${campaign.image_url || campaignPlaceholder})` }">
               <div class="campaign-card-category">
-                {{ categories.find(c => c.id === campaign.category)?.name || 'Uncategorized' }}
+                {{ getCategoryName(campaign.category) }}
               </div>
             </div>
             
@@ -477,7 +532,7 @@ onMounted(() => {
                       </div>
                       <div class="col-6">
                         <label class="text-muted d-block mb-1 fw-bold">Category</label>
-                        <div class="fw-medium">{{ categories.find(c => c.id === selectedCampaign.category)?.name || 'Uncategorized' }}</div>
+                        <div class="fw-medium">{{ getCategoryName(selectedCampaign.category) }}</div>
                       </div>
                     </div>
                   </div>
@@ -501,7 +556,7 @@ onMounted(() => {
                   <div class="mb-3">
                     <label for="proposedAmount" class="form-label fw-bold">Your Proposed Amount</label>
                     <div class="input-group">
-                      <span class="input-group-text">$</span>
+                      <span class="input-group-text">₹</span>
                       <input 
                         type="number" 
                         id="proposedAmount" 

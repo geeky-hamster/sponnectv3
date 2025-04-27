@@ -168,7 +168,7 @@ const handleSubmit = async () => {
                 <div class="card-title h5 mb-4">Settings</div>
                 
                 <div class="mb-3">
-                  <label for="campaignBudget" class="form-label">Budget ($) <span class="text-danger">*</span></label>
+                  <label for="campaignBudget" class="form-label">Budget (₹) <span class="text-danger">*</span></label>
                   <input
                     type="number"
                     class="form-control"
@@ -177,7 +177,7 @@ const handleSubmit = async () => {
                     :class="{ 'is-invalid': validationErrors.budget }"
                     min="1"
                     step="1"
-                    placeholder="Total budget in USD"
+                    placeholder="Total budget in INR"
                   >
                   <div class="invalid-feedback">{{ validationErrors.budget }}</div>
                 </div>

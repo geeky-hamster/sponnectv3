@@ -46,18 +46,20 @@ const displayName = computed(() => {
 const industryOptions = [
   'Technology',
   'Fashion',
+  'Cosmetics',
   'Food & Beverage',
-  'Health & Wellness',
-  'Beauty',
   'Travel',
-  'Financial Services',
-  'Entertainment',
-  'Retail',
-  'Automotive',
-  'Education',
-  'Fitness',
   'Gaming',
+  'Health & Fitness',
+  'Automotive',
+  'Finance',
+  'Art',
+  'Entertainment',
+  'Education',
   'Home & Decor',
+  'Sports',
+  'Media',
+  'Retail',
   'Other'
 ]
 
@@ -75,8 +77,8 @@ const categoryOptions = [
   'Education',
   'Entertainment',
   'Health',
-  'Parenting',
   'Sports',
+  'Parenting',
   'Other'
 ]
 

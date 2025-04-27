@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekly Sponsor Summary</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333333;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            padding: 20px;
+            border: 1px solid #eeeeee;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .section-title {
+            color: #2c3e50;
+            border-bottom: 1px solid #eeeeee;
+            padding-bottom: 10px;
+            margin-top: 20px;
+        }
+        .stats-container {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 15px;
+            width: 45%;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 5px 0;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .campaign-card {
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .campaign-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .campaign-metric {
+            margin-bottom: 5px;
+        }
+        .metric-label {
+            font-weight: bold;
+            color: #555555;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        .table th, .table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .table th {
+            background-color: #f2f2f2;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .footer {
+            font-size: 12px;
+            color: #999999;
+            text-align: center;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Weekly Summary Report</h1>
+            <p>{{ period_start.strftime('%B %d') }} - {{ period_end.strftime('%B %d, %Y') }}</p>
+        </div>
+        
+        <div class="content">
+            <p>Hello {{ sponsor.company_name }},</p>
+            
+            <p>Here's your weekly summary of campaign performance and activities:</p>
+            
+            <h2 class="section-title">Summary Statistics</h2>
+            
+            <div class="stats-container">
+                <div class="stat-card">
+                    <div class="stat-value">{{ active_campaigns }}</div>
+                    <div class="stat-label">Active Campaigns</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-value">{{ new_requests }}</div>
+                    <div class="stat-label">New Ad Requests</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-value">{{ accepted_requests }}</div>
+                    <div class="stat-label">Accepted Requests</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-value">{{ completed_collaborations }}</div>
+                    <div class="stat-label">Completed Collaborations</div>
+                </div>
+            </div>
+            
+            {% if top_campaigns %}
+            <h2 class="section-title">Top Performing Campaigns</h2>
+            
+            {% for campaign in top_campaigns %}
+            <div class="campaign-card">
+                <div class="campaign-name">{{ campaign.name }}</div>
+                
+                <div class="campaign-metric">
+                    <span class="metric-label">Category:</span> {{ campaign.category }}
+                </div>
+                
+                <div class="campaign-metric">
+                    <span class="metric-label">Budget:</span> ₹{{ "{:,.2f}".format(campaign.budget) }}
+                </div>
+                
+                <div class="campaign-metric">
+                    <span class="metric-label">Ad Requests:</span> {{ campaign.request_count }}
+                </div>
+                
+                <div class="campaign-metric">
+                    <span class="metric-label">Started:</span> {{ campaign.created_at.strftime('%B %d, %Y') }}
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+            
+            {% if recent_ad_requests %}
+            <h2 class="section-title">Recent Ad Requests</h2>
+            
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Influencer</th>
+                        <th>Campaign</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for request in recent_ad_requests %}
+                    <tr>
+                        <td>{{ request.influencer.influencer_name }}</td>
+                        <td>{{ request.campaign.name }}</td>
+                        <td>{{ request.status }}</td>
+                        <td>{{ request.created_at.strftime('%b %d') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+            
+            <h2 class="section-title">Recommendations</h2>
+            
+            <p>Based on your campaign performance, here are some recommendations:</p>
+            <ul>
+                {% if recommendations %}
+                    {% for recommendation in recommendations %}
+                    <li>{{ recommendation }}</li>
+                    {% endfor %}
+                {% else %}
+                <li>Consider creating campaigns in trending categories to attract more influencers.</li>
+                <li>Respond promptly to new ad requests to maintain engagement.</li>
+                <li>Update your campaign descriptions with clear expectations for better matches.</li>
+                {% endif %}
+            </ul>
+            
+            <div style="text-align: center;">
+                <a href="{{ dashboard_url }}" class="button">View Dashboard</a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated weekly summary. You can adjust your email preferences in your account settings.</p>
+            <p>&copy; {{ year }} Sponnect. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html> 

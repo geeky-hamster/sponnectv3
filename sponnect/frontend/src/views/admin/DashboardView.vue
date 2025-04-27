@@ -67,21 +67,6 @@ const formatNumber = (num) => {
   return new Intl.NumberFormat('en-IN').format(num)
 }
 
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0
-  }).format(amount || 0)
-}
-
-// Format date for display
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString()
-}
-
 // Calculate percentage for ad request statuses
 const calculatePercentage = (status) => {
   const total = Object.values(stats.value.ad_requests_by_status || {}).reduce((sum, val) => sum + val, 0)
@@ -316,6 +301,71 @@ const rejectUser = async (user) => {
             </div>
           </div>
         </div>
+        <div class="row g-4 mb-4">
+          <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="card-subtitle text-muted">Pending Sponsors</h6>
+                  <div class="icon-circle bg-primary bg-opacity-10">
+                    <i class="bi bi-briefcase text-primary"></i>
+                  </div>
+                </div>
+                <h2 class="display-6 fw-bold mb-0">{{ stats.pending_sponsors || 0 }}</h2>
+                <router-link to="/admin/users?role=sponsor&status=pending" class="mt-3 d-inline-block text-decoration-none">
+                  Manage
+                  <i class="bi bi-arrow-right ms-1"></i>
+                </router-link>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="card-subtitle text-muted">Pending Influencers</h6>
+                  <div class="icon-circle bg-info bg-opacity-10">
+                    <i class="bi bi-person-badge text-info"></i>
+                  </div>
+                </div>
+                <h2 class="display-6 fw-bold mb-0">{{ stats.pending_influencers || 0 }}</h2>
+                <router-link to="/admin/users?role=influencer&status=pending" class="mt-3 d-inline-block text-decoration-none">
+                  Manage
+                  <i class="bi bi-arrow-right ms-1"></i>
+                </router-link>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="card-subtitle text-muted">Active Sponsors</h6>
+                  <div class="icon-circle bg-success bg-opacity-10">
+                    <i class="bi bi-building-check text-success"></i>
+                  </div>
+                </div>
+                <h2 class="display-6 fw-bold mb-0">{{ stats.active_sponsors || 0 }}</h2>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="card-subtitle text-muted">Active Influencers</h6>
+                  <div class="icon-circle bg-success bg-opacity-10">
+                    <i class="bi bi-person-check text-success"></i>
+                  </div>
+                </div>
+                <h2 class="display-6 fw-bold mb-0">{{ stats.active_influencers || 0 }}</h2>
+              </div>
+            </div>
+          </div>
+        </div>
         
         <!-- Campaigns & Ad Requests -->
         <div class="row mb-4">
@@ -372,9 +422,9 @@ const rejectUser = async (user) => {
                       <div class="card-body py-2">
                         <h6 class="text-muted mb-1">Flagged</h6>
                         <h4 class="mb-0">{{ stats.flagged_campaigns || 0 }}</h4>
-            </div>
-          </div>
-            </div>
+                      </div>
+                    </div>
+                  </div>
                   <div class="col-6">
                     <div class="card bg-light border-0">
                       <div class="card-body py-2">
@@ -384,10 +434,10 @@ const rejectUser = async (user) => {
                     </div>
                   </div>
                 </div>
+              </div>
             </div>
           </div>
-        </div>
-        
+          
           <div class="col-md-6 mb-3">
             <div class="card border-0 shadow-sm h-100">
               <div class="card-header bg-white border-0 py-3">
@@ -461,57 +511,13 @@ const rejectUser = async (user) => {
             </div>
           </div>
         </div>
+   
+ 
         
-        <!-- Pending Approvals Section -->
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-            <h4 class="mb-0 text-primary">Pending Sponsor Approvals</h4>
-            <span class="badge bg-warning rounded-pill">{{ pendingSponsors.length }}</span>
-          </div>
-          <div class="card-body p-0">
-            <div v-if="pendingSponsors.length === 0" class="text-center py-4">
-              <i class="bi bi-check-circle text-success fs-1"></i>
-              <p class="mt-2 mb-0">No pending sponsor approvals</p>
-            </div>
-            <div v-else class="table-responsive">
-              <table class="table table-hover mb-0">
-                <thead class="table-light">
-                  <tr>
-                    <th>Username</th>
-                    <th>Company</th>
-                    <th>Industry</th>
-                    <th>Email</th>
-                    <th>Registered</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="sponsor in pendingSponsors" :key="sponsor.id">
-                    <td>{{ sponsor.username }}</td>
-                    <td>{{ sponsor.company_name || 'Not specified' }}</td>
-                    <td>{{ sponsor.industry || 'Not specified' }}</td>
-                    <td>{{ sponsor.email }}</td>
-                    <td>{{ new Date(sponsor.created_at).toLocaleDateString() }}</td>
-                    <td>
-                      <div class="btn-group btn-group-sm">
-                        <button @click="approveSponsor(sponsor.id)" class="btn btn-success">
-                          <i class="bi bi-check me-1"></i>Approve
-                        </button>
-                        <button @click="rejectSponsor(sponsor.id)" class="btn btn-danger">
-                          <i class="bi bi-x me-1"></i>Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              </div>
-            </div>
-          </div>
-          
+        
         <!-- Quick Actions Card -->
         <div class="card border-0 shadow-sm">
-              <div class="card-header bg-white border-0 py-3">
+          <div class="card-header bg-white border-0 py-3">
             <h4 class="mb-0 text-primary">Quick Actions</h4>
           </div>
           <div class="card-body">
@@ -548,33 +554,33 @@ const rejectUser = async (user) => {
                     <p class="text-muted mb-0 small">View detailed platform statistics</p>
                   </div>
                 </router-link>
-                          </div>
+              </div>
               <div class="col-md-3 col-sm-6">
                 <router-link to="/admin/platform-fees" class="card border-0 shadow-sm text-decoration-none card-hover h-100">
                   <div class="card-body text-center p-4">
                     <div class="bg-warning bg-opacity-10 rounded-circle p-3 mx-auto mb-3" style="width: fit-content">
                       <i class="bi bi-cash-stack text-warning fs-3"></i>
-                          </div>
+                    </div>
                     <h5 class="text-warning">Revenue</h5>
                     <p class="text-muted mb-0 small">Track platform earnings and fees</p>
-                        </div>
-                          </router-link>
-                        </div>
-                      </div>
-                    </div>
                   </div>
-                  
+                </router-link>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <!-- Pending Approvals Panel -->
         <div class="card border-0 shadow-sm mb-4">
           <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
             <h4 class="mb-0 text-primary">Pending Approvals</h4>
             <span class="badge bg-warning rounded-pill">{{ pendingUsers.length }} users</span>
-                          </div>
+          </div>
           <div class="card-body p-0">
             <div v-if="pendingUsers.length === 0" class="text-center py-4">
               <i class="bi bi-check-circle-fill text-success fs-1"></i>
               <p class="mt-2 text-muted">No pending approval requests</p>
-                          </div>
+            </div>
             <div v-else class="table-responsive">
               <table class="table mb-0">
                 <thead class="table-light">
@@ -624,77 +630,13 @@ const rejectUser = async (user) => {
             <div v-if="pendingUsers.length > 5" class="text-center py-3 border-top">
               <router-link to="/admin/users?status=pending" class="btn btn-sm btn-outline-primary">
                 View all {{ pendingUsers.length }} pending users
-                          </router-link>
-                        </div>
-                      </div>
-                    </div>
+              </router-link>
+            </div>
+          </div>
+        </div>
 
         <!-- Statistics Cards Row -->
-        <div class="row g-4 mb-4">
-          <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="card-subtitle text-muted">Pending Sponsors</h6>
-                  <div class="icon-circle bg-primary bg-opacity-10">
-                    <i class="bi bi-briefcase text-primary"></i>
-                  </div>
-                </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.pending_sponsors || 0 }}</h2>
-                <router-link to="/admin/users?role=sponsor&status=pending" class="mt-3 d-inline-block text-decoration-none">
-                  Manage
-                  <i class="bi bi-arrow-right ms-1"></i>
-                </router-link>
-              </div>
-            </div>
-          </div>
-          
-          <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="card-subtitle text-muted">Pending Influencers</h6>
-                  <div class="icon-circle bg-info bg-opacity-10">
-                    <i class="bi bi-person-badge text-info"></i>
-        </div>
-          </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.pending_influencers || 0 }}</h2>
-                <router-link to="/admin/users?role=influencer&status=pending" class="mt-3 d-inline-block text-decoration-none">
-                  Manage
-                  <i class="bi bi-arrow-right ms-1"></i>
-                </router-link>
-              </div>
-            </div>
-          </div>
-          
-          <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="card-subtitle text-muted">Active Sponsors</h6>
-                  <div class="icon-circle bg-success bg-opacity-10">
-                    <i class="bi bi-building-check text-success"></i>
-                  </div>
-                </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.active_sponsors || 0 }}</h2>
-              </div>
-            </div>
-          </div>
-          
-          <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="card-subtitle text-muted">Active Influencers</h6>
-                  <div class="icon-circle bg-success bg-opacity-10">
-                    <i class="bi bi-person-check text-success"></i>
-                  </div>
-                </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.active_influencers || 0 }}</h2>
-              </div>
-            </div>
-          </div>
-        </div>
+        
       </div>
     </div>
   </div>

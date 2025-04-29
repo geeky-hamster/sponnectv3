@@ -18,7 +18,7 @@ from models import db, User, Campaign, AdRequest, NegotiationHistory, ProgressUp
 fake = Faker()
 
 # Constants
-NUM_ADMINS = 1
+NUM_ADMINS = 0  # Changed from 1 to 0 to prevent admin creation
 NUM_SPONSORS = 10
 NUM_INFLUENCERS = 20
 NUM_CAMPAIGNS = 30
@@ -27,9 +27,18 @@ NUM_PROGRESS_UPDATES = 40
 NUM_PAYMENTS = 30
 NUM_NEGOTIATIONS = 60
 
+# Industries for sponsors
 CATEGORIES = [
-    "Technology", "Fashion", "Beauty", "Fitness", "Food", "Travel", 
-    "Gaming", "Music", "Art", "Education", "Finance", "Automotive"
+    "Technology", "Fashion", "Cosmetics", "Food & Beverage", "Travel", 
+    "Gaming", "Health & Fitness", "Automotive", "Finance", "Art", 
+    "Entertainment", "Education", "Home & Decor", "Sports", "Media", "Retail"
+]
+
+# Categories for influencers
+INFLUENCER_CATEGORIES = [
+    "Fashion", "Beauty", "Fitness", "Travel", "Food", "Technology", 
+    "Gaming", "Lifestyle", "Business", "Education", "Entertainment", 
+    "Health", "Sports", "Parenting", "Other"
 ]
 
 NICHES = [
@@ -103,32 +112,15 @@ def create_random_password():
     return ''.join(random.choice(string.ascii_letters + string.digits + '!@#$%^&*()') for _ in range(12))
 
 def clear_existing_data():
-    """Delete all existing data from the database."""
-    Payment.query.delete()
-    ProgressUpdate.query.delete()
-    NegotiationHistory.query.delete()
-    AdRequest.query.delete()
-    Campaign.query.delete()
-    User.query.delete()
-    db.session.commit()
-    print("Existing data cleared")
+    """This function has been modified to NOT delete existing data."""
+    print("Skipping data clearing - preserving existing database records")
+    pass  # Do nothing, preserving existing data
 
 def create_users():
-    """Create admin, sponsor, and influencer users."""
+    """Create sponsor and influencer users."""
     users = []
     
-    # Create admin users
-    for i in range(NUM_ADMINS):
-        admin = User(
-            username=f"admin{i+1}",
-            email=f"admin{i+1}@sponnect.com",
-            role="admin",
-            is_active=True,
-            created_at=datetime.utcnow() - timedelta(days=random.randint(30, 365))
-        )
-        admin.set_password("admin123")
-        db.session.add(admin)
-        users.append(admin)
+    # Admin user creation is skipped due to NUM_ADMINS = 0
     
     # Create sponsor users
     for i in range(NUM_SPONSORS):
@@ -157,7 +149,7 @@ def create_users():
             role="influencer",
             is_active=True,
             influencer_name=fake.name(),
-            category=random.choice(CATEGORIES),
+            category=random.choice(INFLUENCER_CATEGORIES),
             niche=random.choice(NICHES),
             reach=random.randint(1000, 1000000),
             influencer_approved=approved,
@@ -169,7 +161,7 @@ def create_users():
         users.append(influencer)
     
     db.session.commit()
-    print(f"Created {NUM_ADMINS} admins, {NUM_SPONSORS} sponsors, and {NUM_INFLUENCERS} influencers")
+    print(f"Created {NUM_SPONSORS} sponsors, and {NUM_INFLUENCERS} influencers")
     return users
 
 def create_campaigns(sponsors):
@@ -380,7 +372,7 @@ def main():
     """Main function to generate mock data."""
     with app.app_context():
         try:
-            clear_existing_data()
+            clear_existing_data()  # This now does nothing but print a message
             users = create_users()
             sponsors = [u for u in users if u.role == 'sponsor']
             influencers = [u for u in users if u.role == 'influencer']
@@ -398,7 +390,6 @@ def main():
             
             # Print summary
             print("\nMock Data Generation Summary:")
-            print(f"- {NUM_ADMINS} Admin users (username: admin1, password: admin123)")
             print(f"- {NUM_SPONSORS} Sponsor users (username: sponsor1, password: sponsor123)")
             print(f"- {NUM_INFLUENCERS} Influencer users (username: influencer1, password: influencer123)")
             print(f"- {len(campaigns)} Campaigns (Total budget: ₹{total_campaign_budget:,.2f})")
@@ -408,6 +399,7 @@ def main():
             print(f"- {len(payments)} Payments (Total: ₹{total_payments:,.2f}, Platform fees: ₹{total_platform_fees:,.2f})")
             
             print("\nMock data generated successfully! All currency values are in Indian Rupees (₹)")
+            print("Note: Existing database records were preserved")
             
         except Exception as e:
             print(f"Error generating mock data: {e}")

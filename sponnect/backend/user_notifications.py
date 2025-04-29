@@ -4,14 +4,14 @@ This module contains Celery tasks for sending notifications to users.
 """
 
 from workers import celery
-from models import db, User, Campaign, AdRequest
+from models import db, User, Campaign, AdRequest, NegotiationHistory, ProgressUpdate, Payment
 from mailer import send_email
 from datetime import datetime, timedelta
 from flask import render_template, render_template_string
 from app import app as flask_app
 import os
 from flask import current_app
-from sqlalchemy import func
+from sqlalchemy import func, and_, or_
 
 @celery.task()
 def send_minute_activity_update():
@@ -352,4 +352,333 @@ def notify_admin_pending_approvals():
     for admin in admins:
         send_email(admin.email, subject, body)
     
-    return f"Pending approvals notification sent to {len(admins)} admins" 
+    return f"Pending approvals notification sent to {len(admins)} admins"
+
+
+@celery.task()
+def send_sponsor_stats_update():
+    """
+    Send detailed stats to sponsors every minute
+    Includes: pending ad requests, negotiations, campaigns, etc.
+    """
+    sponsors = User.query.filter_by(role='sponsor', is_active=True, sponsor_approved=True).all()
+    
+    for sponsor in sponsors:
+        # Get campaign stats
+        active_campaigns = Campaign.query.filter(
+            Campaign.sponsor_id == sponsor.id,
+            Campaign.end_date >= datetime.utcnow()
+        ).count()
+        
+        total_campaigns = Campaign.query.filter_by(sponsor_id=sponsor.id).count()
+        
+        # Get ad request stats
+        pending_requests = AdRequest.query.join(Campaign).filter(
+            Campaign.sponsor_id == sponsor.id,
+            AdRequest.status == 'Pending'
+        ).count()
+        
+        # Get negotiation stats
+        active_negotiations = AdRequest.query.join(Campaign).filter(
+            Campaign.sponsor_id == sponsor.id,
+            AdRequest.status == 'Negotiating'
+        ).count()
+        
+        # Get accepted partnerships
+        accepted_partnerships = AdRequest.query.join(Campaign).filter(
+            Campaign.sponsor_id == sponsor.id,
+            AdRequest.status == 'Accepted'
+        ).count()
+        
+        # Get progress updates
+        pending_progress_updates = ProgressUpdate.query.join(AdRequest).join(Campaign).filter(
+            Campaign.sponsor_id == sponsor.id,
+            ProgressUpdate.status == 'Pending'
+        ).count()
+        
+        # Generate stats summary email
+        subject = f"Sponnect Sponsor Status Update - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+        
+        body = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+                h1, h2, h3 {{ color: #4a6ee0; }}
+                .stats-container {{ border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
+                .stat-item {{ margin-bottom: 10px; }}
+                .highlight {{ background-color: #fff3cd; padding: 5px; border-left: 4px solid #ffc107; }}
+                .action-needed {{ background-color: #f8d7da; padding: 5px; border-left: 4px solid #dc3545; }}
+            </style>
+        </head>
+        <body>
+            <h1>Sponnect Sponsor Dashboard Update</h1>
+            <p>Hello {sponsor.username},</p>
+            <p>Here's your current status on Sponnect:</p>
+            
+            <div class="stats-container">
+                <h2>Campaign Summary</h2>
+                <div class="stat-item">Active Campaigns: <strong>{active_campaigns}</strong></div>
+                <div class="stat-item">Total Campaigns: <strong>{total_campaigns}</strong></div>
+            </div>
+            
+            <div class="stats-container">
+                <h2>Partnership Status</h2>
+                <div class="stat-item {'' if pending_requests == 0 else 'action-needed'}">
+                    Pending Ad Requests: <strong>{pending_requests}</strong>
+                </div>
+                <div class="stat-item {'' if active_negotiations == 0 else 'highlight'}">
+                    Active Negotiations: <strong>{active_negotiations}</strong>
+                </div>
+                <div class="stat-item">
+                    Accepted Partnerships: <strong>{accepted_partnerships}</strong>
+                </div>
+            </div>
+            
+            <div class="stats-container">
+                <h2>Content Progress</h2>
+                <div class="stat-item {'' if pending_progress_updates == 0 else 'action-needed'}">
+                    Pending Progress Reviews: <strong>{pending_progress_updates}</strong>
+                </div>
+            </div>
+            
+            <p>Visit your <a href="{os.environ.get('FRONTEND_URL', 'http://localhost:5173')}/sponsor/dashboard">sponsor dashboard</a> to take action on these items.</p>
+            <p>Best regards,<br>The Sponnect Team</p>
+        </body>
+        </html>
+        """
+        
+        # Send the email
+        send_email(sponsor.email, subject, body)
+    
+    return f"Sponsor stats update sent to {len(sponsors)} sponsors"
+
+
+@celery.task()
+def send_influencer_stats_update():
+    """
+    Send detailed stats to influencers every minute
+    Includes: pending ad requests, negotiations, progress tracking, etc.
+    """
+    influencers = User.query.filter_by(role='influencer', is_active=True, influencer_approved=True).all()
+    
+    for influencer in influencers:
+        # Get ad request stats
+        pending_requests = AdRequest.query.filter(
+            AdRequest.influencer_id == influencer.id,
+            AdRequest.status == 'Pending'
+        ).count()
+        
+        # Get negotiation stats
+        active_negotiations = AdRequest.query.filter(
+            AdRequest.influencer_id == influencer.id,
+            AdRequest.status == 'Negotiating'
+        ).count()
+        
+        # Get accepted partnerships
+        accepted_partnerships = AdRequest.query.filter(
+            AdRequest.influencer_id == influencer.id,
+            AdRequest.status == 'Accepted'
+        ).count()
+        
+        # Get progress updates
+        pending_content_submissions = ProgressUpdate.query.join(AdRequest).filter(
+            AdRequest.influencer_id == influencer.id,
+            ProgressUpdate.status == 'Pending'
+        ).count()
+        
+        # Get matching campaigns
+        matching_campaigns = Campaign.query.filter(
+            Campaign.visibility == 'public',
+            Campaign.end_date >= datetime.utcnow(),
+            or_(
+                Campaign.category == influencer.category,
+                Campaign.category == 'any'
+            )
+        ).count()
+        
+        # Generate stats summary email
+        subject = f"Sponnect Influencer Status Update - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+        
+        body = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+                h1, h2, h3 {{ color: #4a6ee0; }}
+                .stats-container {{ border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
+                .stat-item {{ margin-bottom: 10px; }}
+                .highlight {{ background-color: #fff3cd; padding: 5px; border-left: 4px solid #ffc107; }}
+                .action-needed {{ background-color: #f8d7da; padding: 5px; border-left: 4px solid #dc3545; }}
+                .opportunity {{ background-color: #d4edda; padding: 5px; border-left: 4px solid #28a745; }}
+            </style>
+        </head>
+        <body>
+            <h1>Sponnect Influencer Dashboard Update</h1>
+            <p>Hello {influencer.username},</p>
+            <p>Here's your current status on Sponnect:</p>
+            
+            <div class="stats-container">
+                <h2>Partnership Status</h2>
+                <div class="stat-item {'' if pending_requests == 0 else 'action-needed'}">
+                    Pending Ad Requests: <strong>{pending_requests}</strong>
+                </div>
+                <div class="stat-item {'' if active_negotiations == 0 else 'highlight'}">
+                    Active Negotiations: <strong>{active_negotiations}</strong>
+                </div>
+                <div class="stat-item">
+                    Accepted Partnerships: <strong>{accepted_partnerships}</strong>
+                </div>
+            </div>
+            
+            <div class="stats-container">
+                <h2>Content Progress</h2>
+                <div class="stat-item {'' if pending_content_submissions == 0 else 'action-needed'}">
+                    Pending Content Submissions: <strong>{pending_content_submissions}</strong>
+                </div>
+            </div>
+            
+            <div class="stats-container">
+                <h2>Opportunities</h2>
+                <div class="stat-item opportunity">
+                    Matching Campaigns Available: <strong>{matching_campaigns}</strong>
+                </div>
+            </div>
+            
+            <p>Visit your <a href="{os.environ.get('FRONTEND_URL', 'http://localhost:5173')}/influencer/dashboard">influencer dashboard</a> to take action on these items.</p>
+            <p>Best regards,<br>The Sponnect Team</p>
+        </body>
+        </html>
+        """
+        
+        # Send the email
+        send_email(influencer.email, subject, body)
+    
+    return f"Influencer stats update sent to {len(influencers)} influencers"
+
+
+@celery.task()
+def send_admin_daily_report():
+    """
+    Send detailed platform stats to admins every minute
+    Includes: overall user stats, campaigns, requests, payments, etc.
+    """
+    admins = User.query.filter_by(role='admin', is_active=True).all()
+    
+    # Get platform stats
+    total_users = User.query.count()
+    total_sponsors = User.query.filter_by(role='sponsor').count()
+    total_influencers = User.query.filter_by(role='influencer').count()
+    
+    # Get approval stats
+    pending_sponsor_approvals = User.query.filter(
+        User.role == 'sponsor',
+        User.sponsor_approved.is_(None)
+    ).count()
+    
+    pending_influencer_approvals = User.query.filter(
+        User.role == 'influencer',
+        User.influencer_approved.is_(None)
+    ).count()
+    
+    # Get campaign stats
+    total_campaigns = Campaign.query.count()
+    active_campaigns = Campaign.query.filter(
+        Campaign.end_date >= datetime.utcnow()
+    ).count()
+    
+    # Get ad request stats
+    total_ad_requests = AdRequest.query.count()
+    pending_ad_requests = AdRequest.query.filter_by(status='Pending').count()
+    negotiating_ad_requests = AdRequest.query.filter_by(status='Negotiating').count()
+    accepted_ad_requests = AdRequest.query.filter_by(status='Accepted').count()
+    
+    # Get payment stats
+    total_payments = Payment.query.count()
+    total_payment_amount = db.session.query(func.sum(Payment.amount)).scalar() or 0
+    total_platform_fees = db.session.query(func.sum(Payment.platform_fee)).scalar() or 0
+    
+    for admin in admins:
+        # Generate stats summary email
+        subject = f"Sponnect Admin Daily Report - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+        
+        body = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+                h1, h2, h3 {{ color: #4a6ee0; }}
+                .stats-container {{ border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
+                .stat-item {{ margin-bottom: 10px; }}
+                .highlight {{ background-color: #fff3cd; padding: 5px; border-left: 4px solid #ffc107; }}
+                .action-needed {{ background-color: #f8d7da; padding: 5px; border-left: 4px solid #dc3545; }}
+                .stats-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }}
+            </style>
+        </head>
+        <body>
+            <h1>Sponnect Admin Daily Report</h1>
+            <p>Hello {admin.username},</p>
+            <p>Here's the current status of the Sponnect platform:</p>
+            
+            <div class="stats-container">
+                <h2>User Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">Total Users: <strong>{total_users}</strong></div>
+                    <div class="stat-item">Total Sponsors: <strong>{total_sponsors}</strong></div>
+                    <div class="stat-item">Total Influencers: <strong>{total_influencers}</strong></div>
+                </div>
+            </div>
+            
+            <div class="stats-container">
+                <h2>Pending Approvals</h2>
+                <div class="stats-grid">
+                    <div class="stat-item {'' if pending_sponsor_approvals == 0 else 'action-needed'}">
+                        Pending Sponsor Approvals: <strong>{pending_sponsor_approvals}</strong>
+                    </div>
+                    <div class="stat-item {'' if pending_influencer_approvals == 0 else 'action-needed'}">
+                        Pending Influencer Approvals: <strong>{pending_influencer_approvals}</strong>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stats-container">
+                <h2>Campaign Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">Total Campaigns: <strong>{total_campaigns}</strong></div>
+                    <div class="stat-item">Active Campaigns: <strong>{active_campaigns}</strong></div>
+                </div>
+            </div>
+            
+            <div class="stats-container">
+                <h2>Ad Request Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">Total Ad Requests: <strong>{total_ad_requests}</strong></div>
+                    <div class="stat-item {'' if pending_ad_requests == 0 else 'highlight'}">
+                        Pending Ad Requests: <strong>{pending_ad_requests}</strong>
+                    </div>
+                    <div class="stat-item {'' if negotiating_ad_requests == 0 else 'highlight'}">
+                        Negotiating Ad Requests: <strong>{negotiating_ad_requests}</strong>
+                    </div>
+                    <div class="stat-item">Accepted Ad Requests: <strong>{accepted_ad_requests}</strong></div>
+                </div>
+            </div>
+            
+            <div class="stats-container">
+                <h2>Payment Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">Total Payments: <strong>{total_payments}</strong></div>
+                    <div class="stat-item">Total Payment Amount: <strong>₹{total_payment_amount:,.2f}</strong></div>
+                    <div class="stat-item">Total Platform Fees: <strong>₹{total_platform_fees:,.2f}</strong></div>
+                </div>
+            </div>
+            
+            <p>Visit your <a href="{os.environ.get('FRONTEND_URL', 'http://localhost:5173')}/admin/dashboard">admin dashboard</a> to manage the platform.</p>
+            <p>Best regards,<br>The Sponnect System</p>
+        </body>
+        </html>
+        """
+        
+        # Send the email
+        send_email(admin.email, subject, body)
+    
+    return f"Admin daily report sent to {len(admins)} admins" 

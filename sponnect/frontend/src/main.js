@@ -6,6 +6,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import './assets/main.css'
+import './assets/master.css'
 
 // Set Indian locale for internationalization
 const indiaLocale = 'en-IN';

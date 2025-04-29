@@ -46,19 +46,19 @@
       "percentage": 0.0
     }
   ],
-  "total_payments": 71556.0,
-  "platform_fees": 5971.0,
-  "payment_growth": 0.0,
-  "platform_fee_percentage": 8.3,
+  "total_payments": 84056.0,
+  "platform_fees": 6096.0,
+  "payment_growth": 1250000.0,
+  "platform_fee_percentage": 7.3,
   "payment_types": [
     {
       "name": "Standard Campaigns",
-      "amount": 50089.2,
+      "amount": 58839.2,
       "percentage": 70
     },
     {
       "name": "Premium Campaigns",
-      "amount": 21466.8,
+      "amount": 25216.8,
       "percentage": 30
     }
   ]

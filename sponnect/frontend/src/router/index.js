@@ -15,7 +15,7 @@ const SponsorCampaignEdit = () => import('../views/sponsor/CampaignEditView.vue'
 const SponsorAdRequests = () => import('../views/sponsor/AdRequestsView.vue')
 const SponsorAdRequestDetail = () => import('../views/sponsor/AdRequestDetailView.vue')
 const SponsorCreateRequest = () => import('../views/sponsor/CreateRequestView.vue')
-const RazorpayPaymentView = () => import('../views/sponsor/RazorpayPaymentView.vue')
+const PaymentConfirmationView = () => import('../views/sponsor/PaymentConfirmationView.vue')
 const InfluencerDashboard = () => import('../views/influencer/DashboardView.vue')
 const InfluencerAdRequests = () => import('../views/influencer/AdRequestsView.vue')
 const InfluencerAdRequestDetail = () => import('../views/influencer/AdRequestDetailView.vue')
@@ -106,10 +106,18 @@ const router = createRouter({
       meta: { requiresAuth: true, role: 'sponsor' }
     },
     {
-      path: '/sponsor/payments/:adRequestId',
-      name: 'razorpay-payment',
-      component: RazorpayPaymentView,
-      meta: { requiresAuth: true, role: 'sponsor' }
+      path: '/sponsor/payments/confirm/:adRequestId',
+      name: 'payment-confirmation',
+      component: PaymentConfirmationView,
+      meta: { requiresAuth: true, role: 'sponsor' },
+      props: true
+    },
+    {
+      path: '/sponsor/payments/receipt/:adRequestId/:paymentId',
+      name: 'payment-receipt',
+      component: PaymentConfirmationView,
+      meta: { requiresAuth: true, role: 'sponsor' },
+      props: true
     },
     
     // Influencer routes

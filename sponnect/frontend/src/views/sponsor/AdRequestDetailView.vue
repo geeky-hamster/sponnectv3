@@ -2,10 +2,14 @@
 import { ref, onMounted, computed, reactive, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { sponsorService, negotiationService } from '../../services/api'
+import { downloadPaymentReceipt } from '../../utils/pdf'
 
 const route = useRoute()
 const router = useRouter()
 const adRequestId = computed(() => route.params.id)
+
+// API base URL
+const apiBaseUrl = import.meta.env.VITE_API_URL || ''
 
 // State
 const loading = ref(true)
@@ -338,8 +342,8 @@ const showPaymentModal = ref(false)
 const processingPayment = ref(false)
 const paymentForm = reactive({
   amount: 0,
-  payment_method: '',
-  transaction_id: ''
+  payment_type: 'full', // 'full' or 'partial'
+  message: ''  // Message to include with payment
 })
 
 // Computed property to check if payment can be made
@@ -353,66 +357,42 @@ const closePaymentModal = () => {
   
   // Reset form
   paymentForm.amount = adRequest.value ? adRequest.value.payment_amount : 0
-  paymentForm.payment_method = ''
-  paymentForm.transaction_id = ''
+  paymentForm.payment_type = 'full'
+  paymentForm.message = ''
 }
 
 // Submit payment
 const submitPayment = async () => {
   try {
-    processingPayment.value = true
-    
-    const payload = {
-      amount: paymentForm.amount,
-      payment_method: paymentForm.payment_method,
-      transaction_id: paymentForm.transaction_id || null
+    // Validate the amount if it's a partial payment
+    if (paymentForm.payment_type === 'partial' && (!paymentForm.amount || paymentForm.amount <= 0)) {
+      error.value = 'Please enter a valid payment amount'
+      return
     }
     
-    await sponsorService.createPayment(adRequest.value.id, payload)
+    // Instead of submitting the payment directly, navigate to the payment confirmation page
+    router.push({
+      name: 'payment-confirmation',
+      params: { adRequestId: adRequest.value.id },
+      query: { 
+        amount: paymentForm.payment_type === 'full' ? adRequest.value.payment_amount : paymentForm.amount,
+        type: paymentForm.payment_type,
+        message: paymentForm.message
+      }
+    })
     
-    // Close modal and reset form
+    // Close the modal
     closePaymentModal()
-    
-    // Reload payments
-    await loadPayments()
-    
-    // Show success message
-    success.value = 'Payment processed successfully!'
-    
-    // Clear success message after 3 seconds
-    setTimeout(() => {
-      success.value = ''
-    }, 3000)
-    
   } catch (err) {
-    console.error('Failed to process payment:', err)
-    error.value = 'Failed to process payment'
-  } finally {
-    processingPayment.value = false
+    console.error('Error navigating to payment page:', err)
+    error.value = 'Could not process payment request'
   }
 }
 
-// Navigate to Razorpay payment page
+// Update goToRazorpayPayment function
 const goToRazorpayPayment = () => {
-  // Validate amount
-  if (!paymentForm.amount || paymentForm.amount <= 0) {
-    error.value = 'Please enter a valid payment amount'
-    return
-  }
-  
-  // Check if payment method is Razorpay
-  if (paymentForm.payment_method !== 'Razorpay') {
-    // For non-Razorpay methods, use the regular payment process
-    submitPayment()
-    return
-  }
-  
-  // Navigate to Razorpay payment page with parameters
-  router.push({
-    name: 'razorpay-payment',
-    params: { adRequestId: adRequest.value.id },
-    query: { amount: paymentForm.amount }
-  })
+  // Just call the regular submit payment method
+  submitPayment()
 }
 
 // Load payments
@@ -455,6 +435,19 @@ const enhancedLoadAdRequest = async () => {
     console.error('Error in enhanced load:', err)
     // Error already handled in loadAdRequest
   }
+}
+
+// Download payment receipt
+const downloadReceipt = (payment) => {
+  // Get campaign and user details from ad request if available
+  const enhancedPayment = {
+    ...payment,
+    campaign_name: adRequest.value?.campaign_name,
+    sponsor_name: adRequest.value?.sponsor_name,
+    influencer_name: adRequest.value?.influencer_name
+  }
+  
+  downloadPaymentReceipt(enhancedPayment, formatCurrency)
 }
 </script>
 
@@ -876,8 +869,7 @@ const enhancedLoadAdRequest = async () => {
                     <th>Date</th>
                     <th>Amount</th>
                     <th>Status</th>
-                    <th>Payment Method</th>
-                    <th>Transaction ID</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -891,8 +883,14 @@ const enhancedLoadAdRequest = async () => {
                         'bg-danger': payment.status === 'Failed'
                       }">{{ payment.status }}</span>
                     </td>
-                    <td>{{ payment.payment_method }}</td>
-                    <td><code>{{ payment.transaction_id }}</code></td>
+                    <td>
+                      <button 
+                        class="btn btn-sm btn-outline-primary"
+                        @click="downloadReceipt(payment)"
+                      >
+                        <i class="bi bi-download me-1"></i>Receipt
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -912,6 +910,36 @@ const enhancedLoadAdRequest = async () => {
             <div class="modal-body">
               <form @submit.prevent="submitPayment">
                 <div class="mb-3">
+                  <label class="form-label">Payment Type</label>
+                  <div class="form-check">
+                    <input 
+                      class="form-check-input" 
+                      type="radio" 
+                      id="fullPayment" 
+                      name="paymentType" 
+                      value="full" 
+                      v-model="paymentForm.payment_type"
+                    >
+                    <label class="form-check-label" for="fullPayment">
+                      Full Payment ({{ formatCurrency(adRequest?.payment_amount) }})
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input 
+                      class="form-check-input" 
+                      type="radio" 
+                      id="partialPayment" 
+                      name="paymentType" 
+                      value="partial" 
+                      v-model="paymentForm.payment_type"
+                    >
+                    <label class="form-check-label" for="partialPayment">
+                      Partial Payment
+                    </label>
+                  </div>
+                </div>
+                
+                <div v-if="paymentForm.payment_type === 'partial'" class="mb-3">
                   <label for="paymentAmount" class="form-label">Payment Amount (₹)</label>
                   <input 
                     type="number" 
@@ -919,9 +947,10 @@ const enhancedLoadAdRequest = async () => {
                     v-model="paymentForm.amount" 
                     class="form-control" 
                     min="1" 
+                    max="adRequest?.payment_amount"
                     step="0.01" 
                     required 
-                    :placeholder="'Agreed amount: ₹' + adRequest?.payment_amount"
+                    :placeholder="'Max amount: ₹' + adRequest?.payment_amount"
                   >
                   <div class="form-text">
                     Agreed payment amount: {{ formatCurrency(adRequest?.payment_amount) }}
@@ -929,24 +958,21 @@ const enhancedLoadAdRequest = async () => {
                 </div>
                 
                 <div class="mb-3">
-                  <label for="paymentMethod" class="form-label">Payment Method</label>
-                  <select id="paymentMethod" v-model="paymentForm.payment_method" class="form-select" required>
-                    <option value="" disabled>Select a payment method</option>
-                    <option value="Razorpay">Razorpay</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Other">Other</option>
-                  </select>
+                  <label for="paymentMessage" class="form-label">Message to Influencer (Optional)</label>
+                  <textarea
+                    id="paymentMessage"
+                    v-model="paymentForm.message"
+                    class="form-control"
+                    rows="3"
+                    placeholder="Include a message with your payment..."
+                  ></textarea>
                 </div>
                 
                 <div class="mb-3">
-                  <label for="transactionId" class="form-label">Transaction ID (Optional)</label>
-                  <input 
-                    type="text" 
-                    id="transactionId" 
-                    v-model="paymentForm.transaction_id" 
-                    class="form-control" 
-                    placeholder="Enter transaction reference if available"
-                  >
+                  <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <small>A platform fee of 1% will be deducted from the payment. The influencer will receive {{ formatCurrency(paymentForm.payment_type === 'full' ? adRequest?.payment_amount * 0.99 : paymentForm.amount * 0.99) }}.</small>
+                  </div>
                 </div>
               </form>
             </div>
@@ -955,11 +981,11 @@ const enhancedLoadAdRequest = async () => {
               <button 
                 type="button" 
                 class="btn btn-primary" 
-                @click="goToRazorpayPayment" 
+                @click="submitPayment" 
                 :disabled="processingPayment"
               >
                 <span v-if="processingPayment" class="spinner-border spinner-border-sm me-2"></span>
-                Proceed to Payment
+                Process Payment
               </button>
             </div>
           </div>

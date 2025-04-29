@@ -2,6 +2,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { influencerService } from '../../services/api'
+import { downloadPaymentReceipt } from '../../utils/pdf'
 
 const route = useRoute()
 const router = useRouter()
@@ -381,6 +382,19 @@ const canRespond = computed(() => {
   return (adRequest.value.status === 'Pending') || 
          (adRequest.value.status === 'Negotiating' && adRequest.value.last_offer_by === 'sponsor')
 })
+
+// Download payment receipt
+const downloadReceipt = (payment) => {
+  // Get campaign and user details from ad request if available
+  const enhancedPayment = {
+    ...payment,
+    campaign_name: adRequest.value?.campaign_name,
+    sponsor_name: adRequest.value?.sponsor_name,
+    influencer_name: adRequest.value?.influencer_name
+  }
+  
+  downloadPaymentReceipt(enhancedPayment, formatCurrency)
+}
 </script>
 
 <template>
@@ -882,6 +896,7 @@ const canRespond = computed(() => {
                           <th>Status</th>
                           <th>Payment Method</th>
                           <th>Transaction ID</th>
+                          <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -897,6 +912,14 @@ const canRespond = computed(() => {
                           </td>
                           <td>{{ payment.payment_method }}</td>
                           <td><code>{{ payment.transaction_id }}</code></td>
+                          <td>
+                            <button 
+                              class="btn btn-sm btn-outline-primary"
+                              @click="downloadReceipt(payment)"
+                            >
+                              <i class="bi bi-download me-1"></i>Receipt
+                            </button>
+                          </td>
                         </tr>
                       </tbody>
                     </table>

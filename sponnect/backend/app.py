@@ -12,6 +12,8 @@ from sqlalchemy import func # For stats count
 from math import ceil # For pagination calculation
 import os
 from sqlalchemy import extract, case, text, or_, and_
+import json
+import time
 
 from config import Config
 from models import db, User, Campaign, AdRequest, Payment, NegotiationHistory, ProgressUpdate
@@ -209,7 +211,10 @@ def serialize_campaign_detail(campaign):
         'created_at': format_datetime(campaign.created_at) if campaign.created_at else None,
         'start_date_iso': campaign.start_date.isoformat() if campaign.start_date else None,
         'end_date_iso': campaign.end_date.isoformat() if campaign.end_date else None,
-        'created_at_iso': campaign.created_at.isoformat() if campaign.created_at else None
+        'created_at_iso': campaign.created_at.isoformat() if campaign.created_at else None,
+        # Add sponsor details
+        'sponsor_name': campaign.sponsor.username if campaign.sponsor else "Unknown",
+        'sponsor_company': campaign.sponsor.company_name if campaign.sponsor else None,
     })
     return data
 
@@ -237,9 +242,9 @@ def serialize_ad_request_detail(ad_request):
             'status': ad_request.status, 
             'last_offer_by': ad_request.last_offer_by,
             'created_at': format_datetime(ad_request.created_at) if ad_request.created_at else None,
-            'updated_at': format_datetime(ad_request.updated_at) if ad_request.updated_at else None,
-            'created_at_iso': ad_request.created_at.isoformat() if ad_request.created_at else None,
-            'updated_at_iso': ad_request.updated_at.isoformat() if ad_request.updated_at else None,
+            "updated_at": format_datetime(ad_request.updated_at) if ad_request.updated_at else None,
+            "created_at_iso": ad_request.created_at.isoformat() if ad_request.created_at else None,
+            "updated_at_iso": ad_request.updated_at.isoformat() if ad_request.updated_at else None,
             # Include basic related info
             'campaign_name': campaign_name,
             'influencer_name': influencer_name,
@@ -1251,7 +1256,13 @@ def search_influencers():
 @app.route('/api/search/campaigns', methods=['GET'])
 @jwt_required() # Any logged-in user can search public campaigns
 def search_campaigns():
-    query = Campaign.query.filter_by(visibility='public', is_flagged=False) # Exclude flagged
+    # Join with User to get sponsor information
+    query = Campaign.query.join(
+        User, Campaign.sponsor_id == User.id
+    ).filter(
+        Campaign.visibility == 'public',
+        Campaign.is_flagged == False
+    ) # Exclude flagged
     
     # Apply budget filter
     if budget_min_str := request.args.get('budget_min'):
@@ -2163,3 +2174,285 @@ def test_activity_update():
         "task_id": task.id,
         "note": "Check Mailhog for the test emails. The task is also scheduled to run every minute with Celery Beat."
     }), 202
+
+@app.route('/api/sponsor/ad_requests/<int:ad_request_id>/payments', methods=['GET'])
+@jwt_required()
+@sponsor_required
+def get_payments(ad_request_id):
+    """Get payments for an ad request"""
+    sponsor_id = get_jwt_identity()
+    
+    # Check ad request exists and belongs to the sponsor
+    ad_request = db.session.get(AdRequest, ad_request_id)
+    if not ad_request:
+        return jsonify({"message": "Ad Request not found"}), 404
+    
+    # Verify ownership via campaign
+    if ad_request.campaign.sponsor_id != sponsor_id:
+        return jsonify({"message": "Access denied"}), 403
+    
+    # Get all payments for this ad request
+    payments = Payment.query.filter_by(ad_request_id=ad_request_id).order_by(Payment.created_at.desc()).all()
+    
+    # Serialize payments
+    payments_data = [serialize_payment(payment) for payment in payments]
+    
+    return jsonify(payments_data), 200
+
+@app.route('/api/sponsor/ad_requests/<int:ad_request_id>/payments', methods=['POST'])
+@jwt_required()
+@sponsor_required
+def create_payment(ad_request_id):
+    """Create a new payment for an ad request"""
+    sponsor_id = get_jwt_identity()
+    
+    # Check ad request exists and belongs to the sponsor
+    ad_request = db.session.get(AdRequest, ad_request_id)
+    if not ad_request:
+        return jsonify({"message": "Ad Request not found"}), 404
+    
+    # Verify ownership via campaign
+    if ad_request.campaign.sponsor_id != sponsor_id:
+        return jsonify({"message": "Access denied"}), 403
+    
+    # Check if ad request is accepted (only can pay for accepted requests)
+    if ad_request.status != 'Accepted':
+        return jsonify({"message": "Cannot make payment for non-accepted ad requests"}), 400
+    
+    # Get payment data
+    data = request.get_json()
+    if not data:
+        return jsonify({"message": "No payment data provided"}), 400
+    
+    # Validate required fields
+    if 'amount' not in data:
+        return jsonify({"message": "Payment amount is required"}), 400
+        
+    if 'payment_type' not in data:
+        return jsonify({"message": "Payment type is required"}), 400
+        
+    # Get amount from data or use full payment amount
+    amount = None
+    if data['payment_type'] == 'full':
+        amount = float(ad_request.payment_amount)
+    else:  # partial payment
+        try:
+            amount = float(data['amount'])
+            if amount <= 0:
+                return jsonify({"message": "Payment amount must be positive"}), 400
+            if amount > ad_request.payment_amount:
+                return jsonify({"message": "Partial payment cannot exceed the agreed amount"}), 400
+        except (ValueError, TypeError):
+            return jsonify({"message": "Invalid payment amount"}), 400
+    
+    # Calculate platform fees (1% of payment amount)
+    platform_fee = amount * 0.01  # 1% fee
+    influencer_amount = amount - platform_fee
+    
+    # Generate simple transaction ID
+    transaction_id = f"TXN_{ad_request_id}_{int(time.time())}"
+    
+    # Create payment record
+    payment = Payment(
+        ad_request_id=ad_request_id,
+        amount=amount,
+        platform_fee=platform_fee,
+        influencer_amount=influencer_amount,
+        status='Completed',
+        payment_method='Direct',
+        transaction_id=transaction_id,
+        payment_response=json.dumps({
+            "message": data.get('message', ''),
+            "payment_type": data['payment_type']
+        })
+    )
+    
+    db.session.add(payment)
+    db.session.commit()
+    
+    # Send email notification to the influencer
+    try:
+        influencer = User.query.get(ad_request.influencer_id)
+        sponsor = User.query.get(sponsor_id)
+        
+        if influencer and influencer.email:
+            email_body = f"""
+            Hello {influencer.username},
+            
+            You have received a payment of {format_currency(amount)} for the campaign "{ad_request.campaign.name}".
+            
+            Payment Details:
+            - Amount: {format_currency(amount)}
+            - Platform Fee (1%): {format_currency(platform_fee)}
+            - Net Amount: {format_currency(influencer_amount)}
+            - Transaction ID: {transaction_id}
+            - Date: {format_datetime(datetime.utcnow())}
+            
+            Message from sponsor: {data.get('message', 'No message provided')}
+            
+            Thank you for using our platform!
+            
+            Regards,
+            Sponnect Team
+            """
+            
+            # In production, send the actual email
+            # send_email(influencer.email, "Payment Received", email_body)
+            
+            # For now, log it
+            app.logger.info(f"Email notification would be sent to {influencer.email}")
+    except Exception as e:
+        app.logger.error(f"Failed to send email notification: {str(e)}")
+    
+    return jsonify({
+        "payment": serialize_payment(payment),
+        "receipt_url": f"/api/sponsor/payments/{payment.id}/receipt"
+    }), 201
+
+@app.route('/api/sponsor/payments/<int:payment_id>/receipt', methods=['GET'])
+@jwt_required()
+def get_payment_receipt(payment_id):
+    """Get payment receipt"""
+    try:
+        user_id = get_jwt_identity()
+        
+        # Get payment
+        payment = db.session.get(Payment, payment_id)
+        if not payment:
+            return jsonify({"message": "Payment not found", "error": True}), 404
+        
+        # Get ad request
+        ad_request = payment.ad_request
+        
+        # Check permissions (either the sponsor or influencer can view the receipt)
+        if not (ad_request.campaign.sponsor_id == user_id or ad_request.influencer_id == user_id):
+            return jsonify({"message": "Access denied", "error": True}), 403
+        
+        # Get user details
+        sponsor = User.query.get(ad_request.campaign.sponsor_id)
+        influencer = User.query.get(ad_request.influencer_id)
+        
+        # Create receipt data
+        receipt = {
+            "receipt_id": f"RCPT-{payment.id}",
+            "transaction_id": payment.transaction_id,
+            "date": format_datetime(payment.created_at),
+            "campaign_name": ad_request.campaign.name,
+            "sponsor_name": sponsor.username if sponsor else "Unknown",
+            "influencer_name": influencer.username if influencer else "Unknown",
+            "amount": payment.amount,
+            "amount_formatted": format_currency(payment.amount),
+            "platform_fee": payment.platform_fee,
+            "platform_fee_formatted": format_currency(payment.platform_fee),
+            "influencer_amount": payment.influencer_amount,
+            "influencer_amount_formatted": format_currency(payment.influencer_amount),
+            "payment_method": payment.payment_method,
+            "status": payment.status
+        }
+        
+        return jsonify(receipt), 200
+    except Exception as e:
+        app.logger.error(f"Error generating receipt: {str(e)}", exc_info=True)
+        return jsonify({"message": f"Error generating receipt: {str(e)}", "error": True}), 500
+
+@app.route('/api/influencer/ad_requests/<int:ad_request_id>/payments', methods=['GET'])
+@jwt_required()
+@influencer_required
+def influencer_get_payments(ad_request_id):
+    """Get payments for an ad request (influencer view)"""
+    influencer_id = get_jwt_identity()
+    
+    # Check ad request exists and belongs to the influencer
+    ad_request = db.session.get(AdRequest, ad_request_id)
+    if not ad_request:
+        return jsonify({"message": "Ad Request not found"}), 404
+    
+    # Verify ownership
+    if ad_request.influencer_id != influencer_id:
+        return jsonify({"message": "Access denied"}), 403
+    
+    # Get all payments for this ad request
+    payments = Payment.query.filter_by(ad_request_id=ad_request_id).order_by(Payment.created_at.desc()).all()
+    
+    # Serialize payments
+    payments_data = [serialize_payment(payment) for payment in payments]
+    
+    return jsonify(payments_data), 200
+
+@app.route('/api/sponsor/ad_requests/<int:ad_request_id>/progress', methods=['GET'])
+@jwt_required()
+@sponsor_required
+def sponsor_get_progress_updates(ad_request_id):
+    """Get progress updates for an ad request (sponsor view)"""
+    sponsor_id = get_jwt_identity()
+    
+    # Check ad request exists and belongs to the sponsor
+    ad_request = db.session.get(AdRequest, ad_request_id)
+    if not ad_request:
+        return jsonify({"message": "Ad Request not found"}), 404
+    
+    # Verify ownership via campaign
+    if ad_request.campaign.sponsor_id != sponsor_id:
+        return jsonify({"message": "Access denied"}), 403
+    
+    # Get all progress updates for this ad request
+    from models import ProgressUpdate
+    progress_updates = ProgressUpdate.query.filter_by(ad_request_id=ad_request_id).order_by(ProgressUpdate.created_at.desc()).all()
+    
+    # Serialize progress updates
+    progress_data = [serialize_progress_update(update) for update in progress_updates]
+    
+    return jsonify(progress_data), 200
+
+@app.route('/api/sponsor/ad_requests/<int:ad_request_id>/progress/<int:update_id>', methods=['PATCH'])
+@jwt_required()
+@sponsor_required
+def sponsor_review_progress_update(ad_request_id, update_id):
+    """Review a progress update (sponsor only)"""
+    sponsor_id = get_jwt_identity()
+    
+    # Check ad request exists and belongs to the sponsor
+    ad_request = db.session.get(AdRequest, ad_request_id)
+    if not ad_request:
+        return jsonify({"message": "Ad Request not found"}), 404
+    
+    # Verify ownership via campaign
+    if ad_request.campaign.sponsor_id != sponsor_id:
+        return jsonify({"message": "Access denied"}), 403
+    
+    # Find the progress update
+    from models import ProgressUpdate
+    update = ProgressUpdate.query.filter_by(id=update_id, ad_request_id=ad_request_id).first()
+    if not update:
+        return jsonify({"message": "Progress update not found"}), 404
+    
+    # Check if update is pending (can only review pending updates)
+    if update.status != 'Pending':
+        return jsonify({"message": "Cannot review non-pending updates"}), 400
+    
+    # Get action from request data
+    data = request.get_json()
+    if not data or 'action' not in data:
+        return jsonify({"message": "Action is required"}), 400
+    
+    action = data['action']
+    
+    # Handle different actions
+    if action == 'approve':
+        update.status = 'Approved'
+    elif action == 'request_revision':
+        if 'feedback' not in data or not data['feedback']:
+            return jsonify({"message": "Feedback is required for revision requests"}), 400
+        
+        update.status = 'Revision Requested'
+        update.feedback = data['feedback']
+    else:
+        return jsonify({"message": "Invalid action. Use 'approve' or 'request_revision'"}), 400
+    
+    update.updated_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify({
+        "message": f"Progress update {action}d successfully",
+        "update": serialize_progress_update(update)
+    }), 200

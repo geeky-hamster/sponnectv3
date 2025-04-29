@@ -493,6 +493,12 @@ const getCategoryName = (categoryId) => {
                 <span class="text-muted"> budget</span>
               </div>
               
+              <div class="mb-3">
+                <span class="text-muted">By: </span>
+                <span>{{ campaign.sponsor_name || 'Unknown' }}</span>
+                <span v-if="campaign.sponsor_company"> ({{ campaign.sponsor_company }})</span>
+              </div>
+              
               <p class="card-text campaign-description">
                 {{ campaign.description || 'No description provided.' }}
               </p>
@@ -533,6 +539,13 @@ const getCategoryName = (categoryId) => {
                       <div class="col-6">
                         <label class="text-muted d-block mb-1 fw-bold">Category</label>
                         <div class="fw-medium">{{ getCategoryName(selectedCampaign.category) }}</div>
+                      </div>
+                      <div class="col-12">
+                        <label class="text-muted d-block mb-1 fw-bold">Sponsor</label>
+                        <div class="fw-medium">
+                          {{ selectedCampaign.sponsor_name || 'Unknown' }}
+                          <span v-if="selectedCampaign.sponsor_company">({{ selectedCampaign.sponsor_company }})</span>
+                        </div>
                       </div>
                     </div>
                   </div>

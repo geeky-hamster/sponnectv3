@@ -15,6 +15,8 @@ const loading = ref(true)
 const error = ref('')
 const success = ref('')
 const confirmAction = ref(null)
+const selectedCampaign = ref(null)
+const showDetailsModal = ref(false)
 
 // Filters
 const filters = ref({
@@ -115,17 +117,17 @@ const getActionTitle = (action) => {
 const getActionMessage = (action, campaign) => {
   switch (action) {
     case 'approve': 
-      return `Are you sure you want to approve the campaign "${campaign.title}"? This will make it visible to influencers.`
+      return `Are you sure you want to approve the campaign "${campaign.title || campaign.name}"? This will make it visible to influencers.`
     case 'reject': 
-      return `Are you sure you want to reject the campaign "${campaign.title}"? The sponsor will be notified.`
+      return `Are you sure you want to reject the campaign "${campaign.title || campaign.name}"? The sponsor will be notified.`
     case 'pause': 
-      return `Are you sure you want to pause the campaign "${campaign.title}"? This will temporarily hide it from influencers.`
+      return `Are you sure you want to pause the campaign "${campaign.title || campaign.name}"? This will temporarily hide it from influencers.`
     case 'activate': 
-      return `Are you sure you want to activate the campaign "${campaign.title}"? This will make it visible to influencers.`
+      return `Are you sure you want to activate the campaign "${campaign.title || campaign.name}"? This will make it visible to influencers.`
     case 'feature': 
-      return `Are you sure you want to feature the campaign "${campaign.title}"? This will show it prominently to influencers.`
+      return `Are you sure you want to feature the campaign "${campaign.title || campaign.name}"? This will show it prominently to influencers.`
     case 'unfeature': 
-      return `Are you sure you want to remove the featured status from "${campaign.title}"?`
+      return `Are you sure you want to remove the featured status from "${campaign.title || campaign.name}"?`
     default: 
       return 'Are you sure you want to perform this action?'
   }
@@ -148,27 +150,27 @@ const executeAction = async () => {
     switch (type) {
       case 'approve':
         await adminService.approveCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title}" has been approved`
+        success.value = `Campaign "${campaign.title || campaign.name}" has been approved`
         break
       case 'reject':
         await adminService.rejectCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title}" has been rejected`
+        success.value = `Campaign "${campaign.title || campaign.name}" has been rejected`
         break
       case 'pause':
         await adminService.pauseCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title}" has been paused`
+        success.value = `Campaign "${campaign.title || campaign.name}" has been paused`
         break
       case 'activate':
         await adminService.activateCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title}" has been activated`
+        success.value = `Campaign "${campaign.title || campaign.name}" has been activated`
         break
       case 'feature':
         await adminService.featureCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title}" has been featured`
+        success.value = `Campaign "${campaign.title || campaign.name}" has been featured`
         break
       case 'unfeature':
         await adminService.unfeatureCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title}" has been unfeatured`
+        success.value = `Campaign "${campaign.title || campaign.name}" has been unfeatured`
         break
     }
     
@@ -203,10 +205,38 @@ const getCampaignStatusBadge = (status) => {
 }
 
 const viewCampaignDetails = (campaign) => {
-  // Navigate to campaign details page
-  // This would typically be implemented with vue-router
-  // This is a placeholder for now
-  console.log('View campaign details:', campaign.id)
+  selectedCampaign.value = campaign
+  showDetailsModal.value = true
+}
+
+// Format date with time
+const formatDateWithTime = (dateString) => {
+  if (!dateString) return 'N/A';
+  
+  try {
+    // For debugging
+    console.log('Date string:', dateString);
+    
+    // Handle different date formats
+    const date = new Date(dateString);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.log('Invalid date:', dateString);
+      return 'N/A';
+    }
+    
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'N/A';
+  }
 }
 </script>
 
@@ -400,7 +430,7 @@ const viewCampaignDetails = (campaign) => {
                       </div>
                       <div>
                         <div class="fw-semibold text-truncate" style="max-width: 200px;">
-                          {{ campaign.title }}
+                          {{ campaign.title || campaign.name }}
                           <i v-if="campaign.is_featured" class="bi bi-star-fill text-warning ms-2" title="Featured"></i>
                         </div>
                         <small class="text-muted">ID: {{ campaign.id }}</small>
@@ -409,7 +439,7 @@ const viewCampaignDetails = (campaign) => {
                   </td>
                   <td>
                     <div class="text-truncate" style="max-width: 150px;">
-                      {{ campaign.sponsor?.username || 'Unknown' }}
+                      {{ campaign.sponsor_name || 'Unknown' }}
                     </div>
                     <small class="text-muted">ID: {{ campaign.sponsor_id }}</small>
                   </td>
@@ -425,7 +455,7 @@ const viewCampaignDetails = (campaign) => {
                     <div>{{ formatCurrency(campaign.budget) }}</div>
                     <small class="text-muted">per influencer</small>
                   </td>
-                  <td>{{ new Date(campaign.created_at).toLocaleDateString() }}</td>
+                  <td>{{ formatDateWithTime(campaign.created_at) }}</td>
                   <td>
                     <div class="dropdown">
                       <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
@@ -457,22 +487,6 @@ const viewCampaignDetails = (campaign) => {
                         <li v-if="campaign.status === 'paused' || campaign.status === 'rejected'">
                           <button class="dropdown-item" @click="showConfirmation('activate', campaign)">
                             <i class="bi bi-play-circle text-success me-2"></i>Activate
-                          </button>
-                        </li>
-                        
-                        <!-- Feature actions -->
-                        <li>
-                          <hr class="dropdown-divider">
-                        </li>
-                        
-                        <li v-if="!campaign.is_featured">
-                          <button class="dropdown-item" @click="showConfirmation('feature', campaign)">
-                            <i class="bi bi-star text-warning me-2"></i>Feature
-                          </button>
-                        </li>
-                        <li v-else>
-                          <button class="dropdown-item" @click="showConfirmation('unfeature', campaign)">
-                            <i class="bi bi-star-fill text-warning me-2"></i>Unfeature
                           </button>
                         </li>
                       </ul>
@@ -515,6 +529,89 @@ const viewCampaignDetails = (campaign) => {
                 @click="executeAction"
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Campaign Details Modal -->
+      <div 
+        class="modal fade" 
+        tabindex="-1" 
+        role="dialog"
+        :class="{ show: showDetailsModal }"
+        :style="{ display: showDetailsModal ? 'block' : 'none', backgroundColor: showDetailsModal ? 'rgba(0,0,0,0.5)' : '' }"
+        aria-hidden="true"
+      >
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Campaign Details</h5>
+              <button type="button" class="btn-close" @click="showDetailsModal = false"></button>
+            </div>
+            <div class="modal-body" v-if="selectedCampaign">
+              <div class="row">
+                <div class="col-md-8">
+                  <div class="mb-4">
+                    <h4>{{ selectedCampaign.title || selectedCampaign.name }}</h4>
+                    <span 
+                      class="badge rounded-pill" 
+                      :class="getCampaignStatusBadge(selectedCampaign.status).class"
+                    >
+                      {{ getCampaignStatusBadge(selectedCampaign.status).text }}
+                    </span>
+                    <span v-if="selectedCampaign.is_featured" class="badge bg-warning ms-2">Featured</span>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <h6 class="text-muted">Description</h6>
+                    <p>{{ selectedCampaign.description || 'No description provided.' }}</p>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <h6 class="text-muted">Goals</h6>
+                    <p>{{ selectedCampaign.goals || 'No goals specified.' }}</p>
+                  </div>
+                </div>
+                
+                <div class="col-md-4">
+                  <div class="card mb-3">
+                    <div class="card-body">
+                      <h6 class="text-muted mb-2">Budget</h6>
+                      <div class="fw-bold fs-4">{{ formatCurrency(selectedCampaign.budget) }}</div>
+                      <div class="text-muted small">per influencer</div>
+                    </div>
+                  </div>
+                  
+                  <div class="card mb-3">
+                    <div class="card-body">
+                      <h6 class="text-muted mb-2">Sponsor</h6>
+                      <div>{{ selectedCampaign.sponsor_name || 'Unknown' }}</div>
+                      <div class="text-muted small">ID: {{ selectedCampaign.sponsor_id }}</div>
+                    </div>
+                  </div>
+                  
+                  <div class="card">
+                    <div class="card-body">
+                      <h6 class="text-muted mb-2">Dates</h6>
+                      <div class="mb-1">
+                        <strong>Created:</strong> {{ formatDateWithTime(selectedCampaign.created_at) }}
+                      </div>
+                      <div class="mb-1">
+                        <strong>Start:</strong> {{ formatDate(selectedCampaign.start_date) || 'Not set' }}
+                      </div>
+                      <div>
+                        <strong>End:</strong> {{ formatDate(selectedCampaign.end_date) || 'Not set' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" @click="showDetailsModal = false">
+                Close
               </button>
             </div>
           </div>

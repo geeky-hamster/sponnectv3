@@ -75,6 +75,7 @@ class Campaign(db.Model):
     end_date = db.Column(db.DateTime, nullable=True)
     budget = db.Column(db.Float, nullable=False)
     visibility = db.Column(db.String(10), nullable=False, default='private', index=True) # 'public', 'private'
+    status = db.Column(db.String(20), nullable=False, default='active', index=True) # 'draft', 'pending_approval', 'active', 'paused', 'completed', 'rejected'
     category = db.Column(db.String(50), nullable=True)  # Match category with sponsor's category
     goals = db.Column(db.Text, nullable=True)
     is_flagged = db.Column(db.Boolean, default=False, nullable=False) # For admin flagging
@@ -96,6 +97,11 @@ class Campaign(db.Model):
     def validate_visibility(self, key, visibility):
         assert visibility in ['public', 'private']
         return visibility
+        
+    @validates('status')
+    def validate_status(self, key, status):
+        assert status in ['draft', 'pending_approval', 'active', 'paused', 'completed', 'rejected']
+        return status
 
     def __repr__(self):
         return f'<Campaign {self.name}>'
@@ -112,6 +118,7 @@ class AdRequest(db.Model):
     payment_amount = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='Pending', index=True) # 'Pending', 'Accepted', 'Rejected', 'Negotiating'
     last_offer_by = db.Column(db.String(20), nullable=True) # 'sponsor' or 'influencer' - tracks negotiation turn
+    is_flagged = db.Column(db.Boolean, default=False, nullable=False) # For admin flagging
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

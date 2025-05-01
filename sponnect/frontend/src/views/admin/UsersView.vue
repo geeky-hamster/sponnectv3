@@ -10,6 +10,14 @@ const loading = ref(true)
 const error = ref('')
 const success = ref('')
 
+// Add pagination tracking
+const pagination = ref({
+  page: 1,
+  per_page: 20,
+  total_pages: 1,
+  total_items: 0
+})
+
 // For profile modal
 const selectedUser = ref(null)
 const showProfileModal = ref(false)
@@ -42,14 +50,37 @@ const statusOptions = [
   { value: 'flagged', label: 'Flagged' }
 ]
 
-const loadUsers = async () => {
+const loadUsers = async (page = 1) => {
   try {
     loading.value = true
     error.value = ''
     
-    const response = await adminService.getUsers({})
+    // Add pagination and filter parameters
+    const params = {
+      page,
+      per_page: pagination.value.per_page
+    }
+    
+    // Add filter parameters if they exist
+    if (filters.search) params.search = filters.search
+    if (filters.role) params.role = filters.role
+    if (filters.status) {
+      // Map frontend status filter to backend status parameter
+      if (filters.status === 'flagged') {
+        params.flagged = 'true'
+      } else {
+        params.status = filters.status
+      }
+    }
+    
+    const response = await adminService.getUsers(params)
     console.log('Response from getUsers:', response.data)
     users.value = response.data.users || []
+    
+    // Update pagination data
+    if (response.data.pagination) {
+      pagination.value = response.data.pagination
+    }
     
     // Ensure approval fields are correctly set
     users.value = users.value.map(user => {
@@ -81,79 +112,49 @@ const loadUsers = async () => {
 
 // Apply filters to users list
 const applyFilters = () => {
-  // Debug log - check users data
-  console.log('Applying filters to users:', users.value.map(user => ({
-    id: user.id,
-    role: user.role,
-    sponsor_approved: user.sponsor_approved,
-    influencer_approved: user.influencer_approved
-  })))
-  
-  filteredUsers.value = users.value.filter(user => {
-    // Search filter (case insensitive)
-    const searchMatch = !filters.search || 
-      user.username?.toLowerCase().includes(filters.search.toLowerCase()) ||
-      user.email?.toLowerCase().includes(filters.search.toLowerCase()) ||
-      (user.company_name && user.company_name.toLowerCase().includes(filters.search.toLowerCase()));
-    
-    // Role filter
-    const roleMatch = !filters.role || user.role === filters.role;
-    
-    // Helper to check if user is approved
-    const isUserApproved = (user) => {
-      if (user.role === 'sponsor') {
-        return user.sponsor_approved === true; // Explicit check for true
-      } else if (user.role === 'influencer') {
-        return user.influencer_approved === true; // Explicit check for true
-      }
-      return true; // Admin is always approved
-    };
-    
-    // Status filter
-    let statusMatch = true;
-    if (filters.status) {
-      switch (filters.status) {
-        case 'active':
-          statusMatch = user.is_active && isUserApproved(user);
-          break;
-        case 'inactive':
-          statusMatch = !user.is_active;
-          break;
-        case 'pending':
-          statusMatch = user.is_active && (
-            (user.role === 'sponsor' && user.sponsor_approved === false) || 
-            (user.role === 'influencer' && user.influencer_approved === false)
-          );
-          break;
-        case 'flagged':
-          statusMatch = user.is_flagged;
-          break;
-      }
-    }
-    
-    return searchMatch && roleMatch && statusMatch;
-  });
+  // Since we're now sending filters to the API, we don't need local filtering
+  // Just set filteredUsers to the users received from the API
+  filteredUsers.value = users.value;
   
   // Debug log - filtered results
-  console.log('Filtered users:', filteredUsers.value.length)
+  console.log('Filtered users:', filteredUsers.value.length);
 }
 
 // Watch for filter changes and apply them
+const debouncedSearch = debounce(() => {
+  loadUsers(1); // Reset to page 1 when filters change
+}, 300);
+
 watch(filters, () => {
-  applyFilters();
-});
+  debouncedSearch();
+}, { deep: true });
 
 // Clear all filters
 const clearFilters = () => {
   filters.search = '';
   filters.role = '';
   filters.status = '';
+  loadUsers(1); // Reset to page 1 and reload
 }
 
 // Format date for display
 const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString()
+  if (!dateString) return "N/A"
+  
+  try {
+    const date = new Date(dateString)
+    
+    // Use explicit formatting to avoid locale differences
+    const day = date.getDate().toString().padStart(2, "0")
+    const month = (date.getMonth() + 1).toString().padStart(2, "0") // Months are 0-indexed
+    const year = date.getFullYear()
+    
+    // Format as DD-MM-YYYY
+    return `${day}-${month}-${year}`
+  } catch (e) {
+    console.error("Error formatting date:", e)
+    return "Invalid date"
+  }
 }
 
 // Validate email format
@@ -165,53 +166,76 @@ const isValidEmail = (email) => {
 
 // Show user profile in modal
 const viewUserProfile = (user) => {
-  // First set the user and enable the modal in the DOM
-  selectedUser.value = user
-  showProfileModal.value = true
-  
-  // Need to wait for Vue to render the modal in the DOM
-  setTimeout(() => {
-    // Clean up any existing modal instances and backdrops first
-    cleanupModal(false) // false = don't toggle showProfileModal
+  try {
+    // First set the user and enable the modal in the DOM
+    selectedUser.value = user
+    showProfileModal.value = true
     
-    // Now the modal element should be available
-    if (modalElement.value) {
-      // Create new modal instance
-      bootstrapModalInstance.value = new bootstrap.Modal(modalElement.value)
-      bootstrapModalInstance.value.show()
-    }
-  }, 50)
+    // Need to wait for Vue to render the modal in the DOM
+    setTimeout(() => {
+      try {
+        // Clean up any existing modal instances and backdrops first
+        cleanupModal(false) // false = don't toggle showProfileModal
+        
+        // Now the modal element should be available
+        if (modalElement.value) {
+          // Create new modal instance
+          bootstrapModalInstance.value = new bootstrap.Modal(modalElement.value)
+          bootstrapModalInstance.value.show()
+        } else {
+          console.error('Modal element not found in DOM')
+        }
+      } catch (err) {
+        console.error('Error initializing modal:', err)
+      }
+    }, 100) // Increase the timeout to ensure DOM is updated
+  } catch (err) {
+    console.error('Error in viewUserProfile:', err)
+  }
 }
 
 // Close the modal and clean up properly
 const closeModal = () => {
-  if (bootstrapModalInstance.value) {
-    bootstrapModalInstance.value.hide()
+  try {
+    if (bootstrapModalInstance.value) {
+      bootstrapModalInstance.value.hide()
+    }
+    cleanupModal()
+  } catch (err) {
+    console.error('Error closing modal:', err)
+    // Force cleanup in case of error
+    cleanupModal(true)
   }
-  cleanupModal()
 }
 
 // Function to clean up modal resources
 const cleanupModal = (toggleModal = true) => {
-  if (toggleModal) {
+  try {
+    if (toggleModal) {
+      showProfileModal.value = false
+    }
+    
+    // Dispose the modal instance
+    if (bootstrapModalInstance.value) {
+      bootstrapModalInstance.value.dispose()
+      bootstrapModalInstance.value = null
+    }
+    
+    // Clean up manually in case bootstrap doesn't
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+      backdrop.remove()
+    })
+    
+    // Make sure body doesn't have modal classes
+    document.body.classList.remove('modal-open')
+    document.body.style.overflow = ''
+    document.body.style.paddingRight = ''
+  } catch (err) {
+    console.error('Error cleaning up modal:', err)
+    // Last resort cleanup
     showProfileModal.value = false
-  }
-  
-  // Dispose the modal instance
-  if (bootstrapModalInstance.value) {
-    bootstrapModalInstance.value.dispose()
     bootstrapModalInstance.value = null
   }
-  
-  // Clean up manually in case bootstrap doesn't
-  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-    backdrop.remove()
-  })
-  
-  // Make sure body doesn't have modal classes
-  document.body.classList.remove('modal-open')
-  document.body.style.overflow = ''
-  document.body.style.paddingRight = ''
 }
 
 // Flag/unflag user
@@ -220,25 +244,13 @@ const toggleFlagUser = async (user) => {
     actionLoading.value = true
     
     if (user.is_flagged) {
-      await adminService.unflagUser(user.id)
-      success.value = 'User unflagged successfully'
-      // Update the user's flagged status in the list
-      const index = users.value.findIndex(u => u.id === user.id)
-      if (index !== -1) {
-        users.value[index].is_flagged = false
-      }
+      await unflagUser(user.id)
     } else {
       await adminService.flagUser(user.id)
-      success.value = 'User flagged successfully'
-      // Update the user's flagged status in the list
-      const index = users.value.findIndex(u => u.id === user.id)
-      if (index !== -1) {
-        users.value[index].is_flagged = true
-      }
+      success.value = 'User has been flagged'
+      // Reload the current page
+      await loadUsers(pagination.value.page)
     }
-    
-    // Apply filters after update
-    applyFilters()
     
     // Auto-hide success message after 3 seconds
     setTimeout(() => {
@@ -252,50 +264,11 @@ const toggleFlagUser = async (user) => {
   }
 }
 
-// Approve/unapprove sponsor
-const toggleApproveSponsor = async (user) => {
-  try {
-    // Only allow approving pending sponsors
-    if (user.sponsor_approved === true) {
-      error.value = 'This sponsor is already approved';
-      return;
-    }
-    
-    actionLoading.value = true
-    
-    await adminService.approveSponsor(user.id)
-    success.value = 'Sponsor approved successfully'
-    // Update the user's approval status in the list
-    const index = users.value.findIndex(u => u.id === user.id)
-    if (index !== -1) {
-      users.value[index].sponsor_approved = true
-    }
-    
-    // Update the selected user if viewing in modal
-    if (selectedUser.value && selectedUser.value.id === user.id) {
-      selectedUser.value.sponsor_approved = true
-    }
-    
-    // Apply filters after update
-    applyFilters()
-    
-    // Auto-hide success message after 3 seconds
-    setTimeout(() => {
-      success.value = ''
-    }, 3000)
-  } catch (err) {
-    console.error('Error approving sponsor:', err)
-    error.value = 'Failed to update approval status. Please try again.'
-  } finally {
-    actionLoading.value = false
-  }
-}
-
-// Approve/unapprove user (works for both sponsors and influencers)
+// Approve user (works for both sponsors and influencers)
 const approveUser = async (user) => {
   try {
     // Only allow approving pending users
-    if ((user.role === 'sponsor' && user.sponsor_approved === true) ||
+    if ((user.role === 'sponsor' && user.sponsor_approved === true) || 
         (user.role === 'influencer' && user.influencer_approved === true)) {
       error.value = `This ${user.role} is already approved`;
       return;
@@ -331,8 +304,8 @@ const approveUser = async (user) => {
       }
     }
     
-    // Apply filters after update
-    applyFilters()
+    // Reload with current page
+    await loadUsers(pagination.value.page)
     
     // Auto-hide success message after 3 seconds
     setTimeout(() => {
@@ -370,14 +343,8 @@ const rejectUser = async (user) => {
       closeModal()
     }
     
-    // Remove the user from the list since they are now deactivated
-    const index = users.value.findIndex(u => u.id === user.id)
-    if (index !== -1) {
-      users.value.splice(index, 1)
-    }
-    
-    // Apply filters after update
-    applyFilters()
+    // Reload with current page
+    await loadUsers(pagination.value.page)
     
     // Auto-hide success message after 3 seconds
     setTimeout(() => {
@@ -409,14 +376,14 @@ const activateUser = async (user) => {
     if (index !== -1) {
       users.value[index].is_active = true
       
-      // If we're in the modal, update the selectedUser too
+      // Update the selected user if viewing in modal
       if (selectedUser.value && selectedUser.value.id === user.id) {
         selectedUser.value.is_active = true
       }
     }
     
-    // Apply filters after update
-    applyFilters()
+    // Reload with current page
+    await loadUsers(pagination.value.page)
     
     // Auto-hide success message after 3 seconds
     setTimeout(() => {
@@ -448,14 +415,14 @@ const deactivateUser = async (user) => {
     if (index !== -1) {
       users.value[index].is_active = false
       
-      // If we're in the modal, update the selectedUser too
+      // Update the selected user if viewing in modal
       if (selectedUser.value && selectedUser.value.id === user.id) {
         selectedUser.value.is_active = false
       }
     }
     
-    // Apply filters after update
-    applyFilters()
+    // Reload with current page
+    await loadUsers(pagination.value.page)
     
     // Auto-hide success message after 3 seconds
     setTimeout(() => {
@@ -483,6 +450,40 @@ const getRoleBadgeClass = (role) => {
 onMounted(() => {
   loadUsers()
 })
+
+const unflagUser = async (userId) => {
+  // Create a custom confirmation dialog with options
+  const confirmed = confirm('Are you sure you want to unflag this user? This will restore their ability to log in and interact with the platform.');
+  
+  if (!confirmed) {
+    return;
+  }
+  
+  // Ask if the admin wants to cascade unflag
+  const cascadeUnflag = confirm('Do you also want to unflag all associated content (campaigns and ad requests)?\n\nClick OK to unflag everything.\nClick Cancel to unflag only the user.');
+  
+  try {
+    loading.value = true;
+    const response = await adminService.unflagUser(userId, cascadeUnflag);
+    
+    // Create a more detailed success message based on what was unflagged
+    let successMessage = 'User has been unflagged';
+    
+    if (cascadeUnflag && response.data.unflagged_items) {
+      const items = response.data.unflagged_items;
+      successMessage += ` along with ${items.campaigns || 0} campaigns and ${items.ad_requests || 0} ad requests`;
+    }
+    
+    success.value = successMessage;
+    // Reload the current page
+    await loadUsers(pagination.value.page);
+  } catch (err) {
+    console.error('Error unflagging user:', err);
+    error.value = 'Failed to unflag user. Please try again.';
+  } finally {
+    loading.value = false;
+  }
+};
 </script>
 
 <template>
@@ -577,7 +578,7 @@ onMounted(() => {
       <!-- Users table -->
       <div v-else class="card shadow-sm border-0">
         <div class="card-header bg-white py-3">
-          <h5 class="mb-0">Users List <span class="text-muted fs-6">({{ filteredUsers.length }} users found)</span></h5>
+          <h5 class="mb-0">Users List <span class="text-muted fs-6">({{ filteredUsers.length }} of {{ pagination.total_items || 0 }} users)</span></h5>
         </div>
         <div class="table-responsive">
           <table class="table table-hover mb-0">
@@ -650,6 +651,32 @@ onMounted(() => {
               </tr>
             </tbody>
           </table>
+        </div>
+        
+        <!-- Pagination controls -->
+        <div class="card-footer bg-white py-3 d-flex justify-content-between align-items-center">
+          <span class="text-muted">
+            Showing {{ filteredUsers.length }} of {{ pagination.total_items || 0 }} users
+          </span>
+          <div class="btn-group">
+            <button 
+              class="btn btn-outline-secondary btn-sm" 
+              @click="loadUsers(pagination.page - 1)"
+              :disabled="pagination.page <= 1 || loading"
+            >
+              <i class="bi bi-chevron-left"></i> Previous
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" disabled>
+              Page {{ pagination.page }} of {{ pagination.total_pages }}
+            </button>
+            <button 
+              class="btn btn-outline-secondary btn-sm" 
+              @click="loadUsers(pagination.page + 1)"
+              :disabled="pagination.page >= pagination.total_pages || loading"
+            >
+              Next <i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
         </div>
       </div>
       
@@ -744,7 +771,7 @@ onMounted(() => {
                           </tr>
                           <tr v-if="selectedUser.role === 'influencer'">
                             <th scope="row">Reach</th>
-                            <td>{{ selectedUser.reach ? selectedUser.reach.toLocaleString() : 'Not specified' }}</td>
+                            <td>{{ selectedUser.reach ? selectedUser.reach.toLocaleString('en-IN', ) : 'Not specified' }}</td>
                           </tr>
                         </tbody>
                       </table>

@@ -22,6 +22,9 @@ from user_notifications import (
     send_admin_daily_report
 )
 
+# Import the update_expired_campaigns task
+from app import update_expired_campaigns
+
 @celery.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
     # Daily reminder for pending ad requests - now run every minute
@@ -64,6 +67,13 @@ def setup_periodic_tasks(sender, **kwargs):
         60.0,  # Run every 60 seconds
         notify_admin_pending_approvals.s(),
         name='notify_admin_pending_approvals'
+    )
+    
+    # Check for expired campaigns and mark them as completed
+    sender.add_periodic_task(
+        60.0,  # Run every 60 seconds
+        update_expired_campaigns.s(),
+        name='update_expired_campaigns'
     )
     
     # NEW TASKS - Detailed stats for all user types

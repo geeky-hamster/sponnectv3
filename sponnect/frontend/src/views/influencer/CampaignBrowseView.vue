@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { influencerService, searchService } from '../../services/api'
+import { formatDate } from '../../utils/dateUtils'
 
 const router = useRouter()
 const route = useRoute()
@@ -110,8 +111,60 @@ const loadCampaigns = async () => {
     loading.value = true
     error.value = ''
     
+    console.log('Loading campaigns for influencer...');
     const response = await influencerService.getAvailableCampaigns()
-    campaigns.value = response.data || []
+    
+    // Handle different response formats
+    if (response.data && Array.isArray(response.data)) {
+      // Direct array format
+      campaigns.value = response.data
+      console.log(`Loaded ${response.data.length} campaigns (array format)`);
+    } else if (response.data && Array.isArray(response.data.campaigns)) {
+      // Object with campaigns field
+      campaigns.value = response.data.campaigns
+      console.log(`Loaded ${response.data.campaigns.length} campaigns (object.campaigns format)`);
+    } else {
+      console.error('Unexpected response format:', response.data)
+      campaigns.value = []
+      error.value = 'Error: Received unexpected data format from server'
+    }
+    
+    // Log the first few campaigns for debugging
+    if (campaigns.value.length > 0) {
+      console.log('First campaign data:', JSON.stringify(campaigns.value[0], null, 2));
+      
+      // Verify all required fields are present
+      let missingFields = [];
+      campaigns.value.forEach((campaign, index) => {
+        if (!campaign.name) missingFields.push(`Campaign ${index} missing name`);
+        if (!campaign.description) missingFields.push(`Campaign ${index} missing description`);
+        if (campaign.budget === undefined) missingFields.push(`Campaign ${index} missing budget`);
+        
+        // Ensure dates are properly formatted
+        if (campaign.start_date && campaign.start_date.includes('NaN')) {
+          console.error(`Invalid start_date in campaign ${index}:`, campaign.start_date);
+          // Use ISO date if available
+          if (campaign.start_date_iso) {
+            campaign.start_date = formatDate(campaign.start_date_iso);
+          }
+        }
+        
+        if (campaign.end_date && campaign.end_date.includes('NaN')) {
+          console.error(`Invalid end_date in campaign ${index}:`, campaign.end_date);
+          // Use ISO date if available
+          if (campaign.end_date_iso) {
+            campaign.end_date = formatDate(campaign.end_date_iso);
+          }
+        }
+      });
+      
+      if (missingFields.length > 0) {
+        console.warn('Missing campaign fields:', missingFields);
+      }
+    } else {
+      console.log('No campaigns returned');
+      error.value = 'No active campaigns found. Please check back later.';
+    }
     
     // If a specific campaign ID was provided, open that campaign automatically
     if (selectedCampaignId.value && campaigns.value.length) {
@@ -143,7 +196,17 @@ const searchCampaigns = async () => {
       sort: filters.sort
     })
     
-    campaigns.value = response.data || []
+    // Handle different response formats
+    if (response.data && Array.isArray(response.data)) {
+      // Direct array format
+      campaigns.value = response.data
+    } else if (response.data && Array.isArray(response.data.campaigns)) {
+      // Object with campaigns field
+      campaigns.value = response.data.campaigns
+    } else {
+      console.error('Unexpected response format:', response.data)
+      campaigns.value = []
+    }
     
     if (campaigns.value.length === 0) {
       error.value = 'No campaigns found matching your criteria. Try adjusting your filters.'
@@ -163,18 +226,6 @@ const formatCurrency = (amount) => {
     currency: 'INR',
     minimumFractionDigits: 0
   }).format(amount || 0)
-}
-
-// Format date
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
 }
 
 // Open apply modal

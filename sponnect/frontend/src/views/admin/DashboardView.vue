@@ -82,18 +82,114 @@ const loadAdminData = async () => {
     
     // Make all API calls in parallel
     const [statsResponse, pendingSponsorsResponse, pendingInfluencersResponse, pendingUsersResponse, dashboardSummaryResponse] = await Promise.all([
-      adminService.getStats(),
-      adminService.getPendingSponsors(),
-      adminService.getPendingInfluencers(),
-      adminService.getPendingUsers(),
-      adminService.getDashboardSummary()
+      adminService.getStats().catch(err => {
+        console.error('Error loading stats:', err);
+        return { 
+          data: {
+            total_users: 0,
+            active_sponsors: 0,
+            active_influencers: 0,
+            public_campaigns: 0,
+            private_campaigns: 0,
+            ad_requests_by_status: {
+              Pending: 0,
+              Negotiating: 0,
+              Accepted: 0,
+              Rejected: 0
+            },
+            flagged_users: 0,
+            flagged_campaigns: 0,
+            payment_stats: {
+              total_payments: 0,
+              total_platform_fees: 0,
+              total_payment_count: 0,
+              recent_fees: 0,
+              currency_symbol: '₹'
+            }
+          }
+        };
+      }),
+      adminService.getPendingSponsors().catch(err => {
+        console.error('Error loading pending sponsors:', err);
+        return { data: [] };
+      }),
+      adminService.getPendingInfluencers().catch(err => {
+        console.error('Error loading pending influencers:', err);
+        return { data: [] };
+      }),
+      adminService.getPendingUsers().catch(err => {
+        console.error('Error loading pending users:', err);
+        return { data: [] };
+      }),
+      adminService.getDashboardSummary().catch(err => {
+        console.error('Error loading dashboard summary:', err);
+        return { data: {
+          userSummary: { labels: [], datasets: [] },
+          campaignVisibility: { labels: [], datasets: [] },
+          adRequestStatus: { labels: [], datasets: [] },
+          conversionRate: { value: 0, label: 'Acceptance Rate' },
+          currencySymbol: '₹'
+        }};
+      })
     ]);
     
-    stats.value = statsResponse.data;
-    pendingSponsors.value = pendingSponsorsResponse.data;
-    pendingInfluencers.value = pendingInfluencersResponse.data;
-    pendingUsers.value = pendingUsersResponse.data;
-    dashboardSummary.value = dashboardSummaryResponse.data;
+    // Ensure stats data has all required properties
+    stats.value = {
+      total_users: 0,
+      active_sponsors: 0,
+      active_influencers: 0,
+      public_campaigns: 0,
+      private_campaigns: 0,
+      ad_requests_by_status: {
+        Pending: 0,
+        Negotiating: 0,
+        Accepted: 0,
+        Rejected: 0
+      },
+      flagged_users: 0,
+      flagged_campaigns: 0,
+      payment_stats: {
+        total_payments: 0,
+        total_platform_fees: 0,
+        total_payment_count: 0,
+        recent_fees: 0,
+        currency_symbol: '₹'
+      },
+      ...statsResponse.data
+    };
+    
+    // Ensure we have arrays for pending data
+    pendingSponsors.value = Array.isArray(pendingSponsorsResponse.data) ? pendingSponsorsResponse.data : [];
+    pendingInfluencers.value = Array.isArray(pendingInfluencersResponse.data) ? pendingInfluencersResponse.data : [];
+    pendingUsers.value = Array.isArray(pendingUsersResponse.data) ? pendingUsersResponse.data : [];
+    
+    // Clean pending users data to ensure all required fields are present
+    pendingUsers.value = pendingUsers.value.map(user => ({
+      id: user.id || 0,
+      username: user.username || 'Unknown User',
+      email: user.email || 'no-email@example.com',
+      role: user.role || 'unknown',
+      created_at: user.created_at || new Date().toISOString(),
+      ...user
+    }));
+    
+    // Ensure dashboard summary has valid structure before assigning
+    if (dashboardSummaryResponse && dashboardSummaryResponse.data) {
+      // Make sure conversionRate exists and has a valid value
+      if (!dashboardSummaryResponse.data.conversionRate) {
+        dashboardSummaryResponse.data.conversionRate = { value: 0, label: 'Acceptance Rate' };
+      }
+      
+      // Ensure all required chart data structures exist
+      const requiredCharts = ['userSummary', 'campaignVisibility', 'adRequestStatus'];
+      requiredCharts.forEach(chart => {
+        if (!dashboardSummaryResponse.data[chart]) {
+          dashboardSummaryResponse.data[chart] = { labels: [], datasets: [] };
+        }
+      });
+      
+      dashboardSummary.value = dashboardSummaryResponse.data;
+    }
   } catch (err) {
     console.error('Error loading admin data:', err);
     error.value = 'Failed to load admin dashboard data. Please refresh the page or try again later.';
@@ -598,21 +694,21 @@ const rejectUser = async (user) => {
                       <div class="d-flex align-items-center">
                         <div class="avatar-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center me-2" 
                              style="width: 36px; height: 36px; font-size: 16px;">
-                          {{ user.username.charAt(0).toUpperCase() }}
+                          {{ (user.username && user.username.charAt(0).toUpperCase()) || 'U' }}
                         </div>
-                        {{ user.username }}
+                        {{ user.username || 'Unknown User' }}
                       </div>
                     </td>
                     <td>
                       <span :class="`badge ${user.role === 'sponsor' ? 'bg-primary' : 'bg-info'}`">
-                        {{ user.role }}
+                        {{ user.role || 'unknown' }}
                       </span>
                     </td>
-                    <td>{{ user.email }}</td>
+                    <td>{{ user.email || 'N/A' }}</td>
                     <td>{{ formatDate(user.created_at) }}</td>
                     <td>
                       <div class="btn-group btn-group-sm">
-                        <router-link :to="`/admin/users?view=${user.id}`" class="btn btn-outline-primary">
+                        <router-link :to="`/admin/users/${user.id}`" class="btn btn-outline-primary">
                           <i class="bi bi-eye"></i>
                         </router-link>
                         <button class="btn btn-outline-success" @click="approveUser(user)">
@@ -635,8 +731,46 @@ const rejectUser = async (user) => {
           </div>
         </div>
 
-        <!-- Statistics Cards Row -->
-        
+        <!-- Add a new Stats Card for Flagged Content -->
+        <div class="col-md-6 col-xl-3 mb-4">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <h6 class="text-uppercase text-muted fw-semibold mb-2">Flagged Content</h6>
+                  <h3 class="fw-bold mb-2">
+                    {{ stats.flagged_users + stats.flagged_campaigns || 0 }}
+                  </h3>
+                </div>
+                <div class="icon-shape bg-danger-subtle text-danger rounded-3 p-3">
+                  <i class="bi bi-flag-fill"></i>
+                </div>
+              </div>
+              <div class="mt-2">
+                <span 
+                  v-if="stats.flagged_users > 0"
+                  class="badge bg-danger me-2"
+                  :title="`${stats.flagged_users} flagged users`"
+                >
+                  {{ stats.flagged_users }} Users
+                </span>
+                <span 
+                  v-if="stats.flagged_campaigns > 0"
+                  class="badge bg-danger"
+                  :title="`${stats.flagged_campaigns} flagged campaigns`"
+                >
+                  {{ stats.flagged_campaigns }} Campaigns
+                </span>
+              </div>
+              <router-link to="/admin/users?flagged=true" class="btn btn-sm btn-outline-danger mt-3 me-2">
+                <i class="bi bi-person-fill-x me-1"></i>View Flagged Users
+              </router-link>
+              <router-link to="/admin/campaigns?flagged=true" class="btn btn-sm btn-outline-danger mt-3">
+                <i class="bi bi-flag-fill me-1"></i>View Flagged Campaigns
+              </router-link>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -1,30 +1,13 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { sponsorService } from '../../services/api'
+import { formatDate } from '../../utils/dateUtils'
 
 const loading = ref(true)
 const campaigns = ref([])
 const adRequests = ref([])
 const error = ref('')
 const stats = ref({})
-
-// Format date for better display
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  
-  try {
-    const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'N/A'
-    
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  } catch (e) {
-    return 'N/A'
-  }
-}
 
 onMounted(async () => {
   try {
@@ -141,7 +124,7 @@ onMounted(async () => {
                 <tbody>
                   <tr v-for="campaign in campaigns.slice(0, 5)" :key="campaign.id">
                     <td>{{ campaign.name }}</td>
-                    <td>₹{{ campaign.budget.toLocaleString() }}</td>
+                    <td>₹{{ campaign.budget.toLocaleString('en-IN', ) }}</td>
                     <td>
                       <span :class="{
                         'badge rounded-pill bg-success': campaign.is_visible,
@@ -193,7 +176,7 @@ onMounted(async () => {
                   <tr v-for="request in adRequests.slice(0, 5)" :key="request.id">
                     <td>{{ request.campaign_name }}</td>
                     <td>{{ request.influencer_name }}</td>
-                    <td>₹{{ request.payment_amount.toLocaleString() }}</td>
+                    <td>₹{{ request.payment_amount.toLocaleString('en-IN', ) }}</td>
                     <td>
                       <span 
                         :class="{

@@ -211,31 +211,23 @@ const viewCampaignDetails = (campaign) => {
 
 // Format date with time
 const formatDateWithTime = (dateString) => {
-  if (!dateString) return 'N/A';
+  if (!dateString) return "N/A"
   
   try {
-    // For debugging
-    console.log('Date string:', dateString);
+    const date = new Date(dateString)
     
-    // Handle different date formats
-    const date = new Date(dateString);
+    // Use explicit formatting to avoid locale differences
+    const day = date.getDate().toString().padStart(2, "0")
+    const month = (date.getMonth() + 1).toString().padStart(2, "0") // Months are 0-indexed
+    const year = date.getFullYear()
+    const hours = date.getHours().toString().padStart(2, "0")
+    const minutes = date.getMinutes().toString().padStart(2, "0")
     
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      console.log('Invalid date:', dateString);
-      return 'N/A';
-    }
-    
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch (error) {
-    console.error('Error formatting date:', error);
-    return 'N/A';
+    // Format as DD-MM-YYYY HH:MM
+    return `${day}-${month}-${year} ${hours}:${minutes}`
+  } catch (e) {
+    console.error("Error formatting date:", e)
+    return "Invalid date"
   }
 }
 </script>

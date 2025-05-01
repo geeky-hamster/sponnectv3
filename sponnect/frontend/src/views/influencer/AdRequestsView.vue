@@ -1,7 +1,9 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { influencerService } from '../../services/api'
+import { formatDate, formatCurrency } from '../../utils/formatters'
+import { formatDateWithTime } from '../../utils/dateUtils'
 
 // State
 const loading = ref(true)
@@ -16,7 +18,7 @@ const filters = reactive({
 
 // Available statuses for filter
 const statusOptions = [
-  { value: '', label: 'All Requests' },
+  { value: '', label: 'All Statuses' },
   { value: 'Pending', label: 'Pending' },
   { value: 'Negotiating', label: 'Negotiating' },
   { value: 'Accepted', label: 'Accepted' },
@@ -25,18 +27,18 @@ const statusOptions = [
 
 // Computed property for filtered requests
 const filteredRequests = computed(() => {
-  if (!Array.isArray(adRequests.value)) return []
+  if (!adRequests.value.length) return []
   
   return adRequests.value.filter(request => {
     // Status filter
     const statusMatch = !filters.status || request.status === filters.status
     
-    // Search filter (case insensitive)
-    const searchMatch = !filters.search || 
-      request.campaign_name?.toLowerCase().includes(filters.search.toLowerCase()) ||
-      request.message?.toLowerCase().includes(filters.search.toLowerCase()) ||
-      request.requirements?.toLowerCase().includes(filters.search.toLowerCase())
-      
+    // Search filter
+    const searchTerm = filters.search.toLowerCase()
+    const searchMatch = !searchTerm || 
+      (request.campaign_name && request.campaign_name.toLowerCase().includes(searchTerm)) || 
+      (request.message && request.message.toLowerCase().includes(searchTerm))
+    
     return statusMatch && searchMatch
   })
 })
@@ -57,40 +59,17 @@ const loadAdRequests = async () => {
       console.warn('Expected array response from adRequests endpoint, got:', typeof response.data)
       adRequests.value = []
     }
+    
+    // Debug log: Check first request's structure and fields
+    if (adRequests.value.length > 0) {
+      console.log('First ad request data:', adRequests.value[0])
+    }
   } catch (err) {
     console.error('Failed to load ad requests:', err)
     error.value = 'Failed to load ad requests. Please try again later.'
   } finally {
     loading.value = false
   }
-}
-
-// Format date for better display
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  
-  try {
-    const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'N/A'
-    
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  } catch (e) {
-    console.error('Error formatting date:', e)
-    return 'N/A'
-  }
-}
-
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0
-  }).format(amount || 0)
 }
 
 // Get badge class based on status
@@ -114,6 +93,15 @@ const clearFilters = () => {
 onMounted(() => {
   loadAdRequests()
 })
+
+// Format currency
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0
+  }).format(amount || 0)
+}
 </script>
 
 <template>
@@ -228,7 +216,7 @@ onMounted(() => {
                   {{ request.status }}
                 </span>
               </td>
-              <td>{{ formatDate(request.updated_at) }}</td>
+              <td>{{ formatDateWithTime(request.updated_at) }}</td>
               <td>
                 <router-link 
                   :to="`/influencer/ad-requests/${request.id}`" 

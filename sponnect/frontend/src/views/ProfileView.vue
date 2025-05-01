@@ -308,7 +308,7 @@ const saveProfile = async () => {
                     </div>
                     <div class="col-md-6">
                       <h5 class="text-muted mb-2">Reach</h5>
-                      <p class="fs-5">{{ profile.reach?.toLocaleString() || 'Not specified' }}</p>
+                      <p class="fs-5">{{ profile.reach?.toLocaleString('en-IN', ) || 'Not specified' }}</p>
                     </div>
                   </div>
                 </div>

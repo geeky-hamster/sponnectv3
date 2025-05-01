@@ -60,10 +60,14 @@ const loadData = async () => {
   error.value = ''
   
   try {
-    // Get campaign details and search for influencers
+    // Get campaign details and search for popular influencers
     const [campaignResponse, influencersResponse] = await Promise.all([
       sponsorService.getCampaign(campaignId.value),
-      searchService.searchInfluencers({ limit: 10 }) // Get some initial influencers
+      searchService.searchInfluencers({ 
+        category: '', 
+        limit: 20, 
+        sort: 'popularity' 
+      }) // Get some initial popular influencers
     ])
     
     campaign.value = campaignResponse.data
@@ -73,15 +77,38 @@ const loadData = async () => {
     if (campaign.value) {
       form.value.payment_amount = Math.round(campaign.value.budget * 0.1) // Suggest 10% of budget as default
       
-      // Set default requirements based on campaign goals if available
+      // Set default requirements based on campaign category and goals if available
       if (campaign.value.goals) {
-        form.value.requirements = `Based on our campaign goals: ${campaign.value.goals}`
+        form.value.requirements = `Based on our campaign goals: ${campaign.value.goals}\n\nOur campaign is in the ${campaign.value.category || 'marketing'} category and we're looking for engaging content that resonates with your audience.`
+      }
+
+      // Pre-filter influencers based on campaign category if possible
+      if (campaign.value.category) {
+        searchFilters.category = campaign.value.category
+        searchInfluencers() // Auto-search based on campaign category
       }
     }
     
-    // If influencer_id was provided in the URL, set it
+    // If influencer_id was provided in the URL, set it and show the selection
     if (route.query.influencer_id) {
       form.value.influencer_id = route.query.influencer_id
+      
+      // If the influencer isn't in our list yet, fetch their details
+      if (!influencers.value.find(i => i.id.toString() === form.value.influencer_id.toString())) {
+        try {
+          const response = await searchService.searchInfluencers({ 
+            query: form.value.influencer_id 
+          })
+          
+          // If we found the influencer, add them to our list
+          const foundInfluencer = response.data?.find(i => i.id.toString() === form.value.influencer_id.toString())
+          if (foundInfluencer) {
+            influencers.value.unshift(foundInfluencer) // Add to start of list
+          }
+        } catch (err) {
+          console.error('Failed to fetch influencer details:', err)
+        }
+      }
     }
   } catch (err) {
     console.error('Failed to load data:', err)
@@ -259,9 +286,9 @@ onMounted(() => {
               <form @submit.prevent="handleSubmit">
                 <!-- Influencer selection -->
                 <div class="mb-4">
-                  <label class="form-label">Select Influencer</label>
+                  <label class="form-label fw-bold">Select Influencer</label>
                   
-                  <div class="input-group mb-2">
+                  <div class="input-group mb-3">
                     <span class="input-group-text bg-light border-end-0">
                       <i class="bi bi-search"></i>
                     </span>
@@ -269,15 +296,23 @@ onMounted(() => {
                       type="text" 
                       v-model="searchQuery" 
                       class="form-control border-start-0" 
-                      placeholder="Search for influencers..."
+                      placeholder="Search for influencers by name, category, or niche..."
                     />
+                    <button 
+                      class="btn btn-primary"
+                      type="button"
+                      @click="searchInfluencers"
+                      :disabled="searching"
+                    >
+                      <i class="bi bi-search"></i>
+                    </button>
                   </div>
                   
                   <!-- Advanced search filters -->
                   <div class="card bg-light border-0 mt-2 mb-3">
                     <div class="card-body">
                       <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="mb-0">Advanced Filters</h6>
+                        <h6 class="mb-0 fw-bold">Advanced Filters</h6>
                         <button type="button" class="btn btn-sm btn-outline-secondary" 
                                 @click="searchFilters.category = ''; searchFilters.niche = ''; searchFilters.minReach = ''; searchFilters.maxReach = ''">
                           Reset
@@ -285,46 +320,52 @@ onMounted(() => {
                       </div>
                       <div class="row g-2">
                         <div class="col-md-6">
-                          <select class="form-select form-select-sm" v-model="searchFilters.category">
+                          <label class="form-label small">Category</label>
+                          <select class="form-select" v-model="searchFilters.category">
                             <option v-for="category in categories" :key="category.id" :value="category.id">
                               {{ category.name }}
                             </option>
                           </select>
                         </div>
                         <div class="col-md-6">
+                          <label class="form-label small">Niche</label>
                           <input 
                             type="text" 
-                            class="form-control form-control-sm" 
-                            placeholder="Niche (e.g. cooking, fitness)" 
+                            class="form-control" 
+                            placeholder="E.g., cooking, fitness, tech reviews" 
                             v-model="searchFilters.niche"
                           />
                         </div>
                         <div class="col-md-6">
-                          <div class="input-group input-group-sm">
-                            <span class="input-group-text">Min Reach</span>
+                          <label class="form-label small">Min Reach</label>
+                          <div class="input-group">
                             <input 
                               type="number" 
-                              class="form-control form-control-sm" 
+                              class="form-control" 
                               v-model="searchFilters.minReach"
                               min="0"
+                              placeholder="1000"
                             />
+                            <span class="input-group-text">followers</span>
                           </div>
                         </div>
                         <div class="col-md-6">
-                          <div class="input-group input-group-sm">
-                            <span class="input-group-text">Max Reach</span>
+                          <label class="form-label small">Max Reach</label>
+                          <div class="input-group">
                             <input 
                               type="number" 
-                              class="form-control form-control-sm" 
+                              class="form-control" 
                               v-model="searchFilters.maxReach"
                               min="0"
+                              placeholder="100000"
                             />
+                            <span class="input-group-text">followers</span>
                           </div>
                         </div>
                       </div>
-                      <div class="d-grid mt-2">
-                        <button type="button" class="btn btn-sm btn-primary" @click="searchInfluencers()">
-                          Apply Filters
+                      <div class="d-grid mt-3">
+                        <button type="button" class="btn btn-primary" @click="searchInfluencers()">
+                          <i class="bi bi-filter-circle me-1"></i> Apply Filters
                         </button>
                       </div>
                     </div>
@@ -334,37 +375,128 @@ onMounted(() => {
                     <div class="spinner-border spinner-border-sm text-primary" role="status">
                       <span class="visually-hidden">Searching...</span>
                     </div>
-                    <span class="ms-2">Searching...</span>
+                    <span class="ms-2">Searching for influencers...</span>
                   </div>
                   
-                  <div v-if="searchResults.length > 0" class="mb-3">
-                    <div class="list-group">
+                  <!-- Selected Influencer Preview -->
+                  <div v-if="selectedInfluencer" class="alert alert-success mb-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div>
+                        <h5 class="alert-heading mb-1">
+                          <i class="bi bi-check-circle-fill me-2"></i>
+                          Selected Influencer
+                        </h5>
+                        <p class="mb-0">
+                          <strong>{{ selectedInfluencer.influencer_name }}</strong> -
+                          {{ selectedInfluencer.category }} • {{ selectedInfluencer.niche || 'General' }} •
+                          <span class="badge bg-primary">{{ selectedInfluencer.reach.toLocaleString('en-IN', ) }} followers</span>
+                        </p>
+                      </div>
+                      <button 
+                        class="btn btn-sm btn-outline-danger" 
+                        @click="form.influencer_id = ''"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- Search Results -->
+                  <div v-if="!selectedInfluencer && searchResults.length > 0" class="mb-4">
+                    <h6 class="form-label mb-3">
+                      <i class="bi bi-search me-1"></i> Search Results ({{ searchResults.length }})
+                    </h6>
+                    
+                    <div class="row row-cols-1 row-cols-md-2 g-3">
                       <div 
                         v-for="influencer in searchResults" 
                         :key="influencer.id"
-                        class="list-group-item list-group-item-action"
-                        :class="{ 'active': form.influencer_id.toString() === influencer.id.toString() }"
-                        @click="form.influencer_id = influencer.id.toString()"
+                        class="col"
                       >
-                        <div class="d-flex justify-content-between align-items-center">
-                          <div>
-                            <div class="fw-bold">{{ influencer.influencer_name }}</div>
-                            <small>{{ influencer.category }} • {{ influencer.niche }}</small>
+                        <div 
+                          class="card h-100 border"
+                          :class="{ 'border-primary': form.influencer_id.toString() === influencer.id.toString() }"
+                          style="cursor: pointer;"
+                          @click="form.influencer_id = influencer.id.toString()"
+                        >
+                          <div class="card-body p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                              <h6 class="card-title mb-0 fw-bold">{{ influencer.influencer_name }}</h6>
+                              <span class="badge bg-primary rounded-pill">{{ influencer.reach.toLocaleString('en-IN', ) }}</span>
+                            </div>
+                            <div class="mb-2">
+                              <span class="badge bg-light text-dark me-1">{{ influencer.category }}</span>
+                              <span v-if="influencer.niche" class="badge bg-light text-dark">{{ influencer.niche }}</span>
+                            </div>
+                            <div class="d-grid">
+                              <button 
+                                @click.stop="form.influencer_id = influencer.id.toString()" 
+                                class="btn btn-sm"
+                                :class="form.influencer_id.toString() === influencer.id.toString() ? 'btn-success' : 'btn-outline-primary'"
+                              >
+                                <i 
+                                  :class="form.influencer_id.toString() === influencer.id.toString() ? 'bi bi-check-circle-fill' : 'bi bi-person-plus-fill'"
+                                  class="me-1"
+                                ></i>
+                                {{ form.influencer_id.toString() === influencer.id.toString() ? 'Selected' : 'Select' }}
+                              </button>
+                            </div>
                           </div>
-                          <div class="badge bg-primary rounded-pill">{{ influencer.reach.toLocaleString() }} reach</div>
                         </div>
                       </div>
                     </div>
                   </div>
                   
-                  <div v-if="influencers.length > 0 && !searchQuery" class="mb-3">
-                    <div class="form-label">Top Influencers</div>
-                    <select v-model="form.influencer_id" class="form-select">
-                      <option value="">-- Select an influencer --</option>
-                      <option v-for="influencer in influencers" :key="influencer.id" :value="influencer.id">
-                        {{ influencer.influencer_name }} ({{ influencer.niche }}, {{ influencer.reach.toLocaleString() }} reach)
-                      </option>
-                    </select>
+                  <!-- Top Influencers - when no search has been performed -->
+                  <div v-if="!selectedInfluencer && !searchQuery && influencers.length > 0 && searchResults.length === 0" class="mb-4">
+                    <h6 class="form-label mb-3">
+                      <i class="bi bi-stars me-1"></i> Recommended Influencers
+                    </h6>
+                    
+                    <div class="row row-cols-1 row-cols-md-2 g-3">
+                      <div 
+                        v-for="influencer in influencers" 
+                        :key="influencer.id"
+                        class="col"
+                      >
+                        <div 
+                          class="card h-100 border"
+                          :class="{ 'border-primary': form.influencer_id.toString() === influencer.id.toString() }"
+                          style="cursor: pointer;"
+                          @click="form.influencer_id = influencer.id.toString()"
+                        >
+                          <div class="card-body p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                              <h6 class="card-title mb-0 fw-bold">{{ influencer.influencer_name }}</h6>
+                              <span class="badge bg-primary rounded-pill">{{ influencer.reach.toLocaleString('en-IN', ) }}</span>
+                            </div>
+                            <div class="mb-2">
+                              <span class="badge bg-light text-dark me-1">{{ influencer.category }}</span>
+                              <span v-if="influencer.niche" class="badge bg-light text-dark">{{ influencer.niche }}</span>
+                            </div>
+                            <div class="d-grid">
+                              <button 
+                                @click.stop="form.influencer_id = influencer.id.toString()" 
+                                class="btn btn-sm"
+                                :class="form.influencer_id.toString() === influencer.id.toString() ? 'btn-success' : 'btn-outline-primary'"
+                              >
+                                <i 
+                                  :class="form.influencer_id.toString() === influencer.id.toString() ? 'bi bi-check-circle-fill' : 'bi bi-person-plus-fill'"
+                                  class="me-1"
+                                ></i>
+                                {{ form.influencer_id.toString() === influencer.id.toString() ? 'Selected' : 'Select' }}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- No results state -->
+                  <div v-if="searchQuery && searchResults.length === 0 && !searching" class="alert alert-info">
+                    <i class="bi bi-info-circle-fill me-2"></i> 
+                    No influencers found matching your search criteria. Try adjusting your filters or search terms.
                   </div>
                 </div>
                 
@@ -376,7 +508,7 @@ onMounted(() => {
                       <div class="fw-bold">{{ selectedInfluencer.influencer_name }}</div>
                       <div>{{ selectedInfluencer.category }} • {{ selectedInfluencer.niche }}</div>
                     </div>
-                    <div class="badge bg-primary rounded-pill">{{ selectedInfluencer.reach.toLocaleString() }} reach</div>
+                    <div class="badge bg-primary rounded-pill">{{ selectedInfluencer.reach.toLocaleString('en-IN', ) }} reach</div>
                   </div>
                 </div>
                 

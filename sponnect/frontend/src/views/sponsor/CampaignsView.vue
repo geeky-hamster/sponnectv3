@@ -9,6 +9,7 @@ const campaigns = ref([])
 const filteredCampaigns = ref([])
 const error = ref('')
 const searchQuery = ref('')
+const visibilityFilter = ref('all')
 const statusFilter = ref('all')
 
 // Load campaigns
@@ -28,6 +29,68 @@ const loadCampaigns = async () => {
   }
 }
 
+// Check if campaign is expired
+const isExpired = (campaign) => {
+  if (!campaign || !campaign.end_date_iso) return false
+  
+  const endDate = new Date(campaign.end_date_iso)
+  const now = new Date()
+  
+  return endDate < now && campaign.status !== 'completed'
+}
+
+// Get status display text
+const getStatusText = (campaign) => {
+  if (!campaign) return ''
+  
+  if (isExpired(campaign) && campaign.status === 'active') {
+    return 'Expired'
+  }
+  
+  switch (campaign.status) {
+    case 'active':
+      return 'Active'
+    case 'completed':
+      return 'Completed'
+    case 'paused':
+      return 'Paused'
+    case 'draft':
+      return 'Draft'
+    case 'pending_approval':
+      return 'Pending Approval'
+    case 'rejected':
+      return 'Rejected'
+    default:
+      return campaign.status
+  }
+}
+
+// Get status badge class
+const getStatusBadgeClass = (campaign) => {
+  if (!campaign) return 'bg-secondary'
+  
+  if (isExpired(campaign) && campaign.status === 'active') {
+    return 'bg-warning'
+  }
+  
+  switch (campaign.status) {
+    case 'active':
+      return 'bg-success'
+    case 'completed':
+      return 'bg-info'
+    case 'paused':
+      return 'bg-warning'
+    case 'draft':
+      return 'bg-secondary'
+    case 'pending_approval':
+      return 'bg-primary'
+    case 'rejected':
+      return 'bg-danger'
+    default:
+      return 'bg-secondary'
+  }
+}
+
 // Filter campaigns
 const applyFilters = () => {
   filteredCampaigns.value = campaigns.value.filter(campaign => {
@@ -36,23 +99,45 @@ const applyFilters = () => {
       campaign.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       (campaign.description && campaign.description.toLowerCase().includes(searchQuery.value.toLowerCase()))
     
-    // Apply status filter
-    const matchesStatus = statusFilter.value === 'all' || 
-      (statusFilter.value === 'public' && campaign.visibility === 'public') ||
-      (statusFilter.value === 'private' && campaign.visibility === 'private')
+    // Apply visibility filter
+    const matchesVisibility = visibilityFilter.value === 'all' || 
+      (visibilityFilter.value === 'public' && campaign.visibility === 'public') ||
+      (visibilityFilter.value === 'private' && campaign.visibility === 'private')
     
-    return matchesSearch && matchesStatus
+    // Apply status filter
+    let matchesStatus = true;
+    if (statusFilter.value !== 'all') {
+      if (statusFilter.value === 'expired') {
+        matchesStatus = isExpired(campaign)
+      } else if (statusFilter.value === 'active_current') {
+        matchesStatus = campaign.status === 'active' && !isExpired(campaign)
+      } else {
+        matchesStatus = campaign.status === statusFilter.value
+      }
+    }
+    
+    return matchesSearch && matchesVisibility && matchesStatus
   })
 }
 
 // Format date for display
 const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
+  if (!dateString) return "N/A"
+  
+  try {
+    const date = new Date(dateString)
+    
+    // Use explicit formatting to avoid locale differences
+    const day = date.getDate().toString().padStart(2, "0")
+    const month = (date.getMonth() + 1).toString().padStart(2, "0") // Months are 0-indexed
+    const year = date.getFullYear()
+    
+    // Format as DD-MM-YYYY
+    return `${day}-${month}-${year}`
+  } catch (e) {
+    console.error("Error formatting date:", e)
+    return "Invalid date"
+  }
 }
 
 // Format currency
@@ -80,7 +165,7 @@ const deleteCampaign = async (id) => {
 }
 
 // Watch for filter changes
-watch([searchQuery, statusFilter], () => {
+watch([searchQuery, visibilityFilter, statusFilter], () => {
   applyFilters()
 })
 
@@ -136,10 +221,23 @@ onMounted(() => {
             </div>
             <div class="col-md-3">
               <label for="visibilityFilter" class="form-label">Visibility</label>
-              <select id="visibilityFilter" v-model="statusFilter" class="form-select">
+              <select id="visibilityFilter" v-model="visibilityFilter" class="form-select">
                 <option value="all">All Visibility</option>
                 <option value="public">Public</option>
                 <option value="private">Private</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label for="statusFilter" class="form-label">Status</label>
+              <select id="statusFilter" v-model="statusFilter" class="form-select">
+                <option value="all">All Statuses</option>
+                <option value="expired">Expired</option>
+                <option value="active_current">Active</option>
+                <option value="completed">Completed</option>
+                <option value="paused">Paused</option>
+                <option value="draft">Draft</option>
+                <option value="pending_approval">Pending Approval</option>
+                <option value="rejected">Rejected</option>
               </select>
             </div>
             <div class="col-md-3 d-flex align-items-end">
@@ -176,7 +274,7 @@ onMounted(() => {
           </RouterLink>
         </div>
         <div v-else>
-          <button class="btn btn-outline-secondary" @click="searchQuery = ''; statusFilter = 'all'">
+          <button class="btn btn-outline-secondary" @click="searchQuery = ''; visibilityFilter = 'all'; statusFilter = 'all'">
             Clear Filters
           </button>
         </div>
@@ -193,14 +291,23 @@ onMounted(() => {
               <div class="card-body">
                 <div class="d-flex justify-content-between mb-3">
                   <h5 class="card-title mb-0">{{ campaign.name }}</h5>
-                  <span 
-                    :class="{
-                      'badge rounded-pill bg-success': campaign.visibility === 'public',
-                      'badge rounded-pill bg-secondary': campaign.visibility === 'private'
-                    }"
-                  >
-                    {{ campaign.visibility }}
-                  </span>
+                  <div>
+                    <span 
+                      class="badge rounded-pill me-1"
+                      :class="getStatusBadgeClass(campaign)"
+                    >
+                      {{ getStatusText(campaign) }}
+                    </span>
+                    <span 
+                      class="badge rounded-pill"
+                      :class="{
+                        'bg-success': campaign.visibility === 'public',
+                        'bg-secondary': campaign.visibility === 'private'
+                      }"
+                    >
+                      {{ campaign.visibility }}
+                    </span>
+                  </div>
                 </div>
                 
                 <p class="card-text text-muted">

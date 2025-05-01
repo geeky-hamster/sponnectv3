@@ -272,7 +272,7 @@ onMounted(() => {
                 <div class="d-flex justify-content-between align-items-start mb-3">
                   <h5 class="card-title mb-0">{{ influencer.influencer_name }}</h5>
                   <span class="badge bg-primary rounded-pill">
-                    {{ influencer.reach.toLocaleString() }} reach
+                    {{ influencer.reach.toLocaleString('en-IN', ) }} reach
                   </span>
                 </div>
                 

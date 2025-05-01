@@ -123,17 +123,13 @@ const formatCurrency = (amount) => {
   }).format(amount || 0)
 }
 
-// Format date
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
-
-// Helper function to get category name
+    
+    // Format as DD-MM-YYYY
+    return `${day}-${month}-${year}`
+  } catch (e) {
+    console.error("Error formatting date:", e)
+    return "Invalid date"
+  }
 const getCategoryName = (categoryId) => {
   const category = categories.find(c => c.id === categoryId)
   return category ? category.name : categoryId

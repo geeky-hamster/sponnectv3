@@ -123,7 +123,7 @@ const downloadReceipt = () => {
   const receipt = {
     id: paymentDetails.value?.id || Date.now(),
     transaction_id: paymentDetails.value?.transaction_id || `TXN-${Date.now()}`,
-    created_at: paymentDetails.value?.created_at || new Date().toLocaleString(),
+    created_at: paymentDetails.value?.created_at || new Date().toLocaleString('en-IN', ),
     campaign_name: adRequest.value?.campaign_name || 'Campaign',
     sponsor_name: adRequest.value?.sponsor_name || 'Sponsor',
     influencer_name: adRequest.value?.influencer_name || 'Influencer',

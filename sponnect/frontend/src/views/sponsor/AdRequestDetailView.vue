@@ -69,22 +69,21 @@ const loadAdRequest = async () => {
 
 // Format date
 const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
+  if (!dateString) return "N/A"
   
   try {
     const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'N/A'
     
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    // Use explicit formatting to avoid locale differences
+    const day = date.getDate().toString().padStart(2, "0")
+    const month = (date.getMonth() + 1).toString().padStart(2, "0") // Months are 0-indexed
+    const year = date.getFullYear()
+    
+    // Format as DD-MM-YYYY
+    return `${day}-${month}-${year}`
   } catch (e) {
-    console.error('Error formatting date:', e)
-    return 'N/A'
+    console.error("Error formatting date:", e)
+    return "Invalid date"
   }
 }
 

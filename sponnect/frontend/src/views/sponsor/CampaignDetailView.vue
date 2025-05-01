@@ -68,12 +68,22 @@ const loadCampaign = async () => {
 
 // Format date for display
 const formatDate = (dateString) => {
-  if (!dateString) return 'Not specified'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  if (!dateString) return "N/A"
+  
+  try {
+    const date = new Date(dateString)
+    
+    // Use explicit formatting to avoid locale differences
+    const day = date.getDate().toString().padStart(2, "0")
+    const month = (date.getMonth() + 1).toString().padStart(2, "0") // Months are 0-indexed
+    const year = date.getFullYear()
+    
+    // Format as DD-MM-YYYY
+    return `${day}-${month}-${year}`
+  } catch (e) {
+    console.error("Error formatting date:", e)
+    return "Invalid date"
+  }
 }
 
 // Format currency
@@ -99,6 +109,85 @@ const deleteCampaign = async () => {
     error.value = 'Failed to delete campaign. Please try again later.'
   }
 }
+
+// Mark campaign as completed
+const completeCampaign = async () => {
+  if (!confirm('Are you sure you want to mark this campaign as completed? This action cannot be undone.')) {
+    return
+  }
+  
+  try {
+    const response = await sponsorService.completeCampaign(campaignId.value)
+    campaign.value = response.data.campaign
+    successMessage.value = 'Campaign marked as completed successfully!'
+    
+    // Auto-dismiss success message after 3 seconds
+    setTimeout(() => {
+      successMessage.value = ''
+    }, 3000)
+  } catch (err) {
+    console.error('Failed to complete campaign:', err)
+    error.value = 'Failed to mark campaign as completed. Please try again later.'
+  }
+}
+
+// Check if campaign is expired but not completed
+const isExpired = computed(() => {
+  if (!campaign.value || !campaign.value.end_date_iso) return false
+  
+  const endDate = new Date(campaign.value.end_date_iso)
+  const now = new Date()
+  
+  return endDate < now && campaign.value.status !== 'completed'
+})
+
+// Get status badge color
+const getStatusBadgeClass = computed(() => {
+  if (!campaign.value) return 'bg-secondary'
+  
+  switch (campaign.value.status) {
+    case 'active':
+      return isExpired.value ? 'bg-warning' : 'bg-success'
+    case 'completed':
+      return 'bg-info'
+    case 'paused':
+      return 'bg-warning'
+    case 'draft':
+      return 'bg-secondary'
+    case 'pending_approval':
+      return 'bg-primary'
+    case 'rejected':
+      return 'bg-danger'
+    default:
+      return 'bg-secondary'
+  }
+})
+
+// Get human readable status
+const getStatusText = computed(() => {
+  if (!campaign.value) return ''
+  
+  if (isExpired.value && campaign.value.status === 'active') {
+    return 'Expired'
+  }
+  
+  switch (campaign.value.status) {
+    case 'active':
+      return 'Active'
+    case 'completed':
+      return 'Completed'
+    case 'paused':
+      return 'Paused'
+    case 'draft':
+      return 'Draft'
+    case 'pending_approval':
+      return 'Pending Approval'
+    case 'rejected':
+      return 'Rejected'
+    default:
+      return campaign.value.status
+  }
+})
 
 // Accept an application
 const acceptApplication = async (applicationId) => {
@@ -329,14 +418,44 @@ onMounted(() => {
               >
                 {{ campaign.visibility }}
               </span>
+              <span 
+                class="badge rounded-pill me-2"
+                :class="getStatusBadgeClass"
+              >
+                {{ getStatusText }}
+              </span>
               <span class="text-muted">Created on {{ formatDate(campaign.created_at) }}</span>
             </div>
           </div>
           <div class="d-flex">
-            <RouterLink :to="`/sponsor/campaigns/${campaignId}/edit`" class="btn btn-outline-primary me-2">
+            <RouterLink 
+              v-if="campaign.status !== 'completed'" 
+              :to="`/sponsor/campaigns/${campaignId}/edit`" 
+              class="btn btn-outline-primary me-2"
+            >
               <i class="bi bi-pencil me-1"></i>Edit
             </RouterLink>
-            <button @click="deleteCampaign" class="btn btn-outline-danger">
+            <button 
+              v-if="campaign.status === 'active'" 
+              @click="completeCampaign" 
+              class="btn btn-outline-success me-2"
+              :disabled="loading"
+            >
+              <i class="bi bi-check-circle me-1"></i>Complete
+            </button>
+            <button 
+              v-if="isExpired" 
+              @click="completeCampaign" 
+              class="btn btn-warning me-2"
+              :disabled="loading"
+            >
+              <i class="bi bi-check-circle me-1"></i>Mark as Completed
+            </button>
+            <button 
+              v-if="campaign.status !== 'completed'" 
+              @click="deleteCampaign" 
+              class="btn btn-outline-danger"
+            >
               <i class="bi bi-trash me-1"></i>Delete
             </button>
           </div>
@@ -425,6 +544,29 @@ onMounted(() => {
                     <div class="mb-3 pb-3 border-bottom">
                       <h6 class="text-muted mb-1">End Date</h6>
                       <div>{{ formatDate(campaign.end_date) }}</div>
+                    </div>
+                    
+                    <div class="mb-3 pb-3 border-bottom">
+                      <h6 class="text-muted mb-1">Status</h6>
+                      <div :class="{
+                        'text-success': campaign.status === 'active' && !isExpired,
+                        'text-warning': isExpired || campaign.status === 'paused',
+                        'text-info': campaign.status === 'completed',
+                        'text-danger': campaign.status === 'rejected',
+                        'text-primary': campaign.status === 'pending_approval',
+                        'text-secondary': campaign.status === 'draft'
+                      }">
+                        <i :class="{
+                          'bi bi-check-circle-fill me-1': campaign.status === 'active' && !isExpired,
+                          'bi bi-exclamation-circle-fill me-1': isExpired,
+                          'bi bi-info-circle-fill me-1': campaign.status === 'completed',
+                          'bi bi-x-circle-fill me-1': campaign.status === 'rejected',
+                          'bi bi-clock-fill me-1': campaign.status === 'pending_approval',
+                          'bi bi-pause-circle-fill me-1': campaign.status === 'paused',
+                          'bi bi-file-earmark-fill me-1': campaign.status === 'draft'
+                        }"></i>
+                        {{ getStatusText }}
+                      </div>
                     </div>
                     
                     <div>

@@ -195,7 +195,8 @@ def serialize_campaign_basic(campaign):
         'name': campaign.name, 
         'budget': campaign.budget, 
         'budget_formatted': format_currency(campaign.budget),
-        'visibility': campaign.visibility, 
+        'visibility': campaign.visibility,
+        'status': campaign.status, 
         'is_flagged': campaign.is_flagged
      }
 
@@ -219,42 +220,54 @@ def serialize_campaign_detail(campaign):
     return data
 
 def serialize_ad_request_detail(ad_request):
+    """Detailed ad request serialization with related objects"""
     try:
-        # Safely access related fields
-        campaign_name = ad_request.campaign.name if ad_request.campaign else "Unknown Campaign"
-        influencer_name = None
-        
-        # Handle possible None relationships
-        if ad_request.target_influencer:
-            influencer_name = ad_request.target_influencer.username or ad_request.target_influencer.email or "Unknown"
-        else:
-            influencer_name = "Unknown Influencer"
-            
-        return {
-            'id': ad_request.id, 
-            'campaign_id': ad_request.campaign_id, 
-            'influencer_id': ad_request.influencer_id,
-            'initiator_id': ad_request.initiator_id, 
-            'message': ad_request.message, 
-            'requirements': ad_request.requirements,
-            'payment_amount': ad_request.payment_amount,
-            'payment_amount_formatted': format_currency(ad_request.payment_amount),
-            'status': ad_request.status, 
-            'last_offer_by': ad_request.last_offer_by,
-            'created_at': format_datetime(ad_request.created_at) if ad_request.created_at else None,
-            "updated_at": format_datetime(ad_request.updated_at) if ad_request.updated_at else None,
-            "created_at_iso": ad_request.created_at.isoformat() if ad_request.created_at else None,
-            "updated_at_iso": ad_request.updated_at.isoformat() if ad_request.updated_at else None,
-            # Include basic related info
-            'campaign_name': campaign_name,
-            'influencer_name': influencer_name,
+        # Get basic attributes
+        result = {
+            "id": ad_request.id,
+            "status": ad_request.status,
+            "payment_amount": ad_request.payment_amount,
+            "requirements": ad_request.requirements,
+            "message": ad_request.message,
+            "last_offer_by": ad_request.last_offer_by,
+            "payment_amount_formatted": format_currency(ad_request.payment_amount)
         }
+        
+        # Add dates with proper formatting - both ISO and human readable
+        if ad_request.created_at:
+            result["created_at"] = format_datetime(ad_request.created_at)
+            result["created_at_iso"] = ad_request.created_at.isoformat()
+        
+        if ad_request.updated_at:
+            result["updated_at"] = format_datetime(ad_request.updated_at)
+            result["updated_at_iso"] = ad_request.updated_at.isoformat()
+        
+        # Include campaign details
+        if ad_request.campaign:
+            result["campaign"] = serialize_campaign_basic(ad_request.campaign)
+            result["campaign_id"] = ad_request.campaign.id
+            result["campaign_name"] = ad_request.campaign.name
+        
+        # Include influencer details
+        if ad_request.target_influencer:
+            result["influencer"] = serialize_user_basic(ad_request.target_influencer)
+            result["influencer_id"] = ad_request.target_influencer.id
+            result["influencer_name"] = ad_request.target_influencer.username
+        
+        # Include sponsor details through campaign if available
+        if ad_request.campaign and ad_request.campaign.sponsor:
+            result["sponsor"] = serialize_user_basic(ad_request.campaign.sponsor)
+            result["sponsor_id"] = ad_request.campaign.sponsor.id
+            result["sponsor_name"] = ad_request.campaign.sponsor.username
+        
+        return result
     except Exception as e:
-        app.logger.error(f"Error in serialize_ad_request_detail: {str(e)}")
-        # Return minimal data to prevent complete failure
+        app.logger.error(f"Error serializing ad request {ad_request.id}: {str(e)}")
+        # Return minimal information to avoid breaking the frontend
         return {
-            'id': ad_request.id if hasattr(ad_request, 'id') else None,
-            'error': f"Error serializing ad request: {str(e)}"
+            "id": ad_request.id,
+            "status": getattr(ad_request, "status", "Unknown"),
+            "error": "Error processing this ad request"
         }
 
 def serialize_negotiation_history(history_item):
@@ -403,6 +416,13 @@ def login():
     # Check if user is active
     if not getattr(user, 'is_active', True):
         return jsonify({"message": "Account is disabled. Please contact support."}), 403
+    
+    # Check if user is flagged
+    if user.is_flagged:
+        return jsonify({
+            "message": "Your account has been flagged due to policy violations. Please contact support for assistance.",
+            "error": "ACCOUNT_FLAGGED"
+        }), 403
     
     # Check role-specific approval requirements
     if user.role == 'sponsor' and user.sponsor_approved is False:
@@ -655,9 +675,50 @@ def admin_reject_influencer(influencer_id):
 def admin_flag_user(user_id):
     user = db.session.get(User, user_id)
     if not user or user.role == 'admin': return jsonify({"message": "User not found or cannot flag admin"}), 404
+    
+    # Flag the user
     user.is_flagged = True
+    
+    # Cascade flag to related content
+    if user.role == 'sponsor':
+        # Flag all campaigns by this sponsor
+        campaigns = Campaign.query.filter_by(sponsor_id=user_id).all()
+        for campaign in campaigns:
+            campaign.is_flagged = True
+        
+        # Flag all ad requests associated with these campaigns
+        for campaign in campaigns:
+            ad_requests = AdRequest.query.filter_by(campaign_id=campaign.id).all()
+            for ad_request in ad_requests:
+                ad_request.is_flagged = True
+    
+    elif user.role == 'influencer':
+        # Flag all ad requests where this user is the influencer
+        ad_requests = AdRequest.query.filter_by(influencer_id=user_id).all()
+        for ad_request in ad_requests:
+            ad_request.is_flagged = True
+    
     db.session.commit()
-    return jsonify({"message": "User flagged"}), 200
+    
+    # Count affected items for the response
+    flagged_campaigns = 0
+    flagged_ad_requests = 0
+    
+    if user.role == 'sponsor':
+        flagged_campaigns = Campaign.query.filter_by(sponsor_id=user_id, is_flagged=True).count()
+        flagged_ad_requests = AdRequest.query.join(Campaign).filter(Campaign.sponsor_id == user_id, AdRequest.is_flagged == True).count()
+    elif user.role == 'influencer':
+        flagged_ad_requests = AdRequest.query.filter_by(influencer_id=user_id, is_flagged=True).count()
+    
+    return jsonify({
+        "message": "User flagged successfully",
+        "flagged_items": {
+            "user": user.username,
+            "role": user.role,
+            "campaigns": flagged_campaigns,
+            "ad_requests": flagged_ad_requests
+        }
+    }), 200
 
 @app.route('/api/admin/users/<int:user_id>/unflag', methods=['PATCH'])
 @jwt_required()
@@ -665,9 +726,58 @@ def admin_flag_user(user_id):
 def admin_unflag_user(user_id):
     user = db.session.get(User, user_id)
     if not user: return jsonify({"message": "User not found"}), 404
+    
+    # Unflag the user
     user.is_flagged = False
+    
+    # Check if we should cascade unflag
+    cascade = request.args.get('cascade', 'false').lower() == 'true'
+    
+    if cascade:
+        # Cascade unflag to related content
+        if user.role == 'sponsor':
+            # Unflag all campaigns by this sponsor
+            campaigns = Campaign.query.filter_by(sponsor_id=user_id).all()
+            for campaign in campaigns:
+                campaign.is_flagged = False
+            
+            # Unflag all ad requests associated with these campaigns
+            for campaign in campaigns:
+                ad_requests = AdRequest.query.filter_by(campaign_id=campaign.id).all()
+                for ad_request in ad_requests:
+                    ad_request.is_flagged = False
+        
+        elif user.role == 'influencer':
+            # Unflag all ad requests where this user is the influencer
+            ad_requests = AdRequest.query.filter_by(influencer_id=user_id).all()
+            for ad_request in ad_requests:
+                ad_request.is_flagged = False
+                
+        unflagged_campaigns = 0
+        unflagged_ad_requests = 0
+        
+        if user.role == 'sponsor':
+            unflagged_campaigns = Campaign.query.filter_by(sponsor_id=user_id).count()
+            unflagged_ad_requests = AdRequest.query.join(Campaign).filter(Campaign.sponsor_id == user_id).count()
+        elif user.role == 'influencer':
+            unflagged_ad_requests = AdRequest.query.filter_by(influencer_id=user_id).count()
+            
+        message = "User unflagged with cascade"
+        response_data = {
+            "unflagged_items": {
+                "user": user.username,
+                "role": user.role,
+                "campaigns": unflagged_campaigns,
+                "ad_requests": unflagged_ad_requests
+            }
+        }
+    else:
+        message = "User unflagged"
+        response_data = {}
+    
     db.session.commit()
-    return jsonify({"message": "User unflagged"}), 200
+    
+    return jsonify({"message": message, **response_data}), 200
 
 @app.route('/api/admin/campaigns/<int:campaign_id>/flag', methods=['PATCH'])
 @jwt_required()
@@ -678,16 +788,6 @@ def admin_flag_campaign(campaign_id):
     campaign.is_flagged = True
     db.session.commit()
     return jsonify({"message": "Campaign flagged"}), 200
-
-@app.route('/api/admin/campaigns/<int:campaign_id>/unflag', methods=['PATCH'])
-@jwt_required()
-@admin_required
-def admin_unflag_campaign(campaign_id):
-    campaign = db.session.get(Campaign, campaign_id)
-    if not campaign: return jsonify({"message": "Campaign not found"}), 404
-    campaign.is_flagged = False
-    db.session.commit()
-    return jsonify({"message": "Campaign unflagged"}), 200
 
 @app.route('/api/admin/campaigns', methods=['GET'])
 @jwt_required()
@@ -1085,9 +1185,46 @@ def influencer_get_ad_requests():
     influencer_id = get_jwt_identity()
     status_filter = request.args.get('status')
     query = AdRequest.query.filter_by(influencer_id=influencer_id)
-    if status_filter: query = query.filter(AdRequest.status == status_filter)
-    requests = query.order_by(AdRequest.updated_at.desc()).all()
-    return jsonify([serialize_ad_request_detail(r) for r in requests]), 200
+    if status_filter:
+        query = query.filter(AdRequest.status == status_filter)
+    
+    # Join with Campaign and User (sponsor) to get all needed information
+    ad_requests = query.join(Campaign, AdRequest.campaign_id == Campaign.id)\
+                      .join(User, Campaign.sponsor_id == User.id)\
+                      .order_by(AdRequest.updated_at.desc())\
+                      .all()
+    
+    # Process results
+    serialized_requests = []
+    for req in ad_requests:
+        data = serialize_ad_request_detail(req)
+        
+        # Ensure campaign name is directly accessible
+        if 'campaign' in data and data['campaign'].get('name'):
+            data['campaign_name'] = data['campaign']['name']
+        elif req.campaign:
+            data['campaign_name'] = req.campaign.name or 'Unnamed Campaign'
+        else:
+            data['campaign_name'] = 'Unnamed Campaign'
+        
+        # Ensure influencer name is directly accessible
+        if 'influencer' in data and data['influencer'].get('influencer_name'):
+            data['influencer_name'] = data['influencer']['influencer_name']
+        elif req.target_influencer:
+            data['influencer_name'] = req.target_influencer.influencer_name or req.target_influencer.username
+        else:
+            data['influencer_name'] = 'Unknown Influencer'
+        
+        # Ensure dates are available in both formatted and ISO format
+        for date_field in ['created_at', 'updated_at']:
+            if req.__dict__.get(date_field):
+                date_obj = getattr(req, date_field)
+                data[f'{date_field}_iso'] = date_obj.isoformat()
+                data[date_field] = format_datetime(date_obj)
+        
+        serialized_requests.append(data)
+    
+    return jsonify(serialized_requests), 200
 
 @app.route('/api/influencer/ad_requests/<int:ad_request_id>', methods=['PATCH'])
 @jwt_required()
@@ -1241,72 +1378,171 @@ def influencer_apply_campaign(campaign_id):
 @jwt_required() # Any logged-in user can search
 def search_influencers():
     query = User.query.filter_by(role='influencer', is_active=True, is_flagged=False) # Exclude flagged
-    if niche := request.args.get('niche'): query = query.filter(User.niche.ilike(f'%{niche}%'))
+    
+    # Text search
+    if search_query := request.args.get('query'):
+        query = query.filter(
+            or_(
+                User.username.ilike(f'%{search_query}%'),
+                User.influencer_name.ilike(f'%{search_query}%'),
+                User.category.ilike(f'%{search_query}%'),
+                User.niche.ilike(f'%{search_query}%')
+            )
+        )
+    
+    # Specific ID search - useful for direct lookup
+    if user_id := request.args.get('id'):
+        try:
+            user_id = int(user_id)
+            query = query.filter(User.id == user_id)
+        except (ValueError, TypeError):
+            pass
+    
+    # Filters
+    if niche := request.args.get('niche'): 
+        query = query.filter(User.niche.ilike(f'%{niche}%'))
+        
     if category := request.args.get('category'): 
         # Validate the category is in our allowed list
         if category in INFLUENCER_CATEGORIES:
             query = query.filter(User.category == category)
-    if reach_min_str := request.args.get('reach_min'):
-        try: query = query.filter(User.reach >= int(reach_min_str))
-        except (ValueError, TypeError): pass
-    # Add pagination later
-    influencers = query.order_by(User.reach.desc()).limit(50).all()
+    
+    # Reach filters
+    if reach_min_str := request.args.get('min_reach'):
+        try: 
+            query = query.filter(User.reach >= int(reach_min_str))
+        except (ValueError, TypeError): 
+            pass
+            
+    if reach_max_str := request.args.get('max_reach'):
+        try: 
+            query = query.filter(User.reach <= int(reach_max_str))
+        except (ValueError, TypeError): 
+            pass
+    
+    # Get limit parameter (default 20, max 50)
+    try:
+        limit = min(int(request.args.get('limit', 20)), 50)
+    except (ValueError, TypeError):
+        limit = 20
+    
+    # Sorting
+    sort_by = request.args.get('sort', 'reach')
+    if sort_by == 'popularity':
+        # Sort by reach (as a popularity proxy) - highest first
+        query = query.order_by(User.reach.desc())
+    elif sort_by == 'name':
+        query = query.order_by(User.influencer_name)
+    elif sort_by == 'newest':
+        query = query.order_by(User.created_at.desc())
+    else:
+        # Default sorting by reach
+        query = query.order_by(User.reach.desc())
+    
+    # Execute query with limit
+    influencers = query.limit(limit).all()
+    
+    # Return serialized influencers
     return jsonify([serialize_user_profile(i) for i in influencers]), 200
 
 @app.route('/api/search/campaigns', methods=['GET'])
 @jwt_required() # Any logged-in user can search public campaigns
 def search_campaigns():
     # Join with User to get sponsor information
-    query = Campaign.query.join(
-        User, Campaign.sponsor_id == User.id
-    ).filter(
-        Campaign.visibility == 'public',
-        Campaign.is_flagged == False
-    ) # Exclude flagged
+    user_id = get_jwt_identity()
+    user = db.session.get(User, user_id)
     
-    # Apply budget filter
-    if budget_min_str := request.args.get('budget_min'):
-         try: query = query.filter(Campaign.budget >= float(budget_min_str))
-         except (ValueError, TypeError): pass
-    if budget_max_str := request.args.get('budget_max'):
-         try: query = query.filter(Campaign.budget <= float(budget_max_str))
-         except (ValueError, TypeError): pass
-         
-    # Apply category filter
-    if category := request.args.get('category'):
-        # Validate the category is in our allowed list
-        if category in CATEGORIES:
-            query = query.filter(Campaign.category == category)
+    # Get query parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = min(request.args.get('per_page', 10, type=int), 50)  # Limit max items
+    category = request.args.get('category')
+    query = request.args.get('query', '')
+    min_budget = request.args.get('min_budget', 0, type=float)
+    max_budget = request.args.get('max_budget')
     
-    # Apply text search filter
-    if search_text := request.args.get('query'):
-        query = query.filter(or_(
-            Campaign.name.ilike(f'%{search_text}%'),
-            Campaign.description.ilike(f'%{search_text}%')
+    # Build base query - join with User to get sponsor details
+    base_q = db.session.query(Campaign, User).join(User, Campaign.sponsor_id == User.id)
+    
+    # Filter basic requirements:
+    # 1. Campaign visibility must be public (unless user is viewing their own campaigns)
+    # 2. Campaign should not be flagged (unless user is admin)
+    # 3. Sponsor must be approved
+    # 4. Sponsor user must be active
+    # 5. Campaign dates should make sense (start date <= today)
+    
+    # Start with basic criteria
+    criteria = [
+        User.sponsor_approved == True,
+        User.is_active == True,
+        Campaign.start_date <= datetime.utcnow()
+    ]
+    
+    # Non-admin users shouldn't see flagged campaigns
+    if user.role != 'admin':
+        criteria.append(Campaign.is_flagged == False)
+    
+    # Apply visibility filter (sponsors can see their own private campaigns)
+    if user.role == 'sponsor':
+        # Sponsors see public campaigns OR their own campaigns (including private)
+        visibility_filter = or_(Campaign.visibility == 'public', 
+                               and_(Campaign.visibility == 'private', Campaign.sponsor_id == user_id))
+        criteria.append(visibility_filter)
+    else:
+        # Regular users only see public campaigns
+        criteria.append(Campaign.visibility == 'public')
+    
+    # Apply additional filters from query params
+    if category:
+        criteria.append(Campaign.category == category)
+    if query:
+        criteria.append(or_(
+            Campaign.name.ilike(f'%{query}%'),
+            Campaign.description.ilike(f'%{query}%')
         ))
+    if min_budget:
+        criteria.append(Campaign.budget >= min_budget)
+    if max_budget:
+        criteria.append(Campaign.budget <= float(max_budget))
     
-    # Apply sorting
-    sort_by = request.args.get('sort', 'latest')
-    if sort_by == 'oldest':
-        query = query.order_by(Campaign.created_at.asc())
-    elif sort_by == 'budget_high':
-        query = query.order_by(Campaign.budget.desc())
-    elif sort_by == 'budget_low':
-        query = query.order_by(Campaign.budget.asc())
-    else:  # default to 'latest'
-        query = query.order_by(Campaign.created_at.desc())
+    # Complete the query
+    search_query = base_q.filter(and_(*criteria))
+    
+    # Order and paginate
+    search_query = search_query.order_by(Campaign.created_at.desc())
+    campaigns_page = search_query.paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Process results
+    campaigns_data = []
+    for campaign, sponsor in campaigns_page.items:
+        # Use detailed serialization instead of basic to include more fields
+        campaign_dict = serialize_campaign_detail(campaign)
         
-    # Get limit parameter with default value of 50
-    limit = 50
-    try:
-        limit_param = request.args.get('limit')
-        if limit_param:
-            limit = min(int(limit_param), 50)  # Cap at 50 max
-    except (ValueError, TypeError):
-        pass
-            
-    campaigns = query.limit(limit).all()
-    return jsonify([serialize_campaign_detail(c) for c in campaigns]), 200
+        # Ensure all required fields are present with fallbacks
+        campaign_dict['name'] = campaign_dict.get('name') or campaign.name or 'Unnamed Campaign'
+        campaign_dict['description'] = campaign_dict.get('description') or campaign.description or ''
+        campaign_dict['budget'] = campaign_dict.get('budget') or campaign.budget or 0
+        campaign_dict['sponsor_name'] = sponsor.company_name or sponsor.username or 'Unknown Sponsor'
+        campaign_dict['sponsor_id'] = sponsor.id
+        
+        # Ensure date fields are properly formatted for frontend
+        if campaign.start_date:
+            campaign_dict['start_date'] = format_date(campaign.start_date)
+            campaign_dict['start_date_iso'] = campaign.start_date.isoformat()
+        
+        if campaign.end_date:
+            campaign_dict['end_date'] = format_date(campaign.end_date)
+            campaign_dict['end_date_iso'] = campaign.end_date.isoformat()
+        
+        if campaign.created_at:
+            campaign_dict['created_at'] = format_datetime(campaign.created_at)
+            campaign_dict['created_at_iso'] = campaign.created_at.isoformat()
+        
+        campaigns_data.append(campaign_dict)
+    
+    return jsonify({
+        'campaigns': campaigns_data,
+        'pagination': serialize_pagination(campaigns_page)
+    }), 200
 
 # == ChartJS Data Endpoints ==
 @app.route('/api/charts/user-growth', methods=['GET'])
@@ -1370,62 +1606,6 @@ def chart_user_growth():
                 'backgroundColor': 'rgba(153, 102, 255, 0.2)',
             }
         ]
-    }
-    
-    return jsonify(chart_data), 200
-
-@app.route('/api/charts/campaign-distribution', methods=['GET'])
-@jwt_required()
-@admin_required
-def chart_campaign_distribution():
-    """Returns budget distribution data of campaigns for ChartJS"""
-    # Define budget ranges for grouping
-    ranges = [
-        (0, 1000),
-        (1000, 5000),
-        (5000, 10000),
-        (10000, 50000),
-        (50000, float('inf'))
-    ]
-    
-    range_labels = [
-        'Under $1K',
-        '$1K-$5K',
-        '$5K-$10K',
-        '$10K-$50K',
-        'Over $50K'
-    ]
-    
-    # Count campaigns in each budget range
-    counts = []
-    for i, (min_val, max_val) in enumerate(ranges):
-        if max_val == float('inf'):
-            count = Campaign.query.filter(Campaign.budget >= min_val).count()
-        else:
-            count = Campaign.query.filter(Campaign.budget >= min_val, Campaign.budget < max_val).count()
-        counts.append(count)
-    
-    # Prepare data for ChartJS Pie/Doughnut chart
-    chart_data = {
-        'labels': range_labels,
-        'datasets': [{
-            'data': counts,
-            'backgroundColor': [
-                'rgba(255, 99, 132, 0.6)',
-                'rgba(54, 162, 235, 0.6)',
-                'rgba(255, 206, 86, 0.6)',
-                'rgba(75, 192, 192, 0.6)',
-                'rgba(153, 102, 255, 0.6)',
-            ],
-            'borderColor': [
-                'rgba(255, 99, 132, 1)',
-                'rgba(54, 162, 235, 1)',
-                'rgba(255, 206, 86, 1)',
-                'rgba(75, 192, 192, 1)',
-                'rgba(153, 102, 255, 1)',
-            ],
-            'borderWidth': 1
-        }]
     }
     
     return jsonify(chart_data), 200
@@ -1665,12 +1845,16 @@ def chart_dashboard_summary():
             }]
         },
         'conversionRate': {
-            'value': round((accepted_requests / total_requests * 100), 1) if total_requests > 0 else 0,
+            'value': 0,  # Default value
             'label': 'Acceptance Rate'
         },
         'currencySymbol': CURRENCY_SYMBOL,
         'timezoneName': 'IST (UTC+5:30)'
     }
+    
+    # Calculate conversion rate only if there are requests
+    if total_requests > 0:
+        chart_data['conversionRate']['value'] = round((accepted_requests / total_requests) * 100, 1)
     
     return jsonify(chart_data), 200
 
@@ -2456,3 +2640,131 @@ def sponsor_review_progress_update(ad_request_id, update_id):
         "message": f"Progress update {action}d successfully",
         "update": serialize_progress_update(update)
     }), 200
+
+@app.route('/api/admin/ad_requests/<int:ad_request_id>/flag', methods=['PATCH'])
+@jwt_required()
+@admin_required
+def admin_flag_ad_request(ad_request_id):
+    ad_request = db.session.get(AdRequest, ad_request_id)
+    if not ad_request: return jsonify({"message": "Ad request not found"}), 404
+    ad_request.is_flagged = True
+    db.session.commit()
+    return jsonify({"message": "Ad request flagged"}), 200
+
+@app.route('/api/admin/ad_requests/<int:ad_request_id>/unflag', methods=['PATCH'])
+@jwt_required()
+@admin_required
+def admin_unflag_ad_request(ad_request_id):
+    ad_request = db.session.get(AdRequest, ad_request_id)
+    if not ad_request: return jsonify({"message": "Ad request not found"}), 404
+    ad_request.is_flagged = False
+    db.session.commit()
+    return jsonify({"message": "Ad request unflagged"}), 200
+
+@app.route('/api/admin/ad_requests', methods=['GET'])
+@jwt_required()
+@admin_required
+def admin_list_ad_requests():
+    """Get list of ad requests with pagination and filtering options"""
+    # Parse query parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = min(request.args.get('per_page', 10, type=int), 100)  # Cap at 100 items
+    
+    # Filtering options
+    status = request.args.get('status', '')
+    flagged = request.args.get('flagged', '').lower() == 'true'
+    campaign_id = request.args.get('campaign_id', type=int)
+    influencer_id = request.args.get('influencer_id', type=int)
+    
+    # Build query
+    query = AdRequest.query
+    
+    # Apply filters
+    if status:
+        query = query.filter(AdRequest.status == status)
+    if flagged:
+        query = query.filter(AdRequest.is_flagged == True)
+    if campaign_id:
+        query = query.filter(AdRequest.campaign_id == campaign_id)
+    if influencer_id:
+        query = query.filter(AdRequest.influencer_id == influencer_id)
+    
+    # Order by most recent first
+    query = query.order_by(AdRequest.created_at.desc())
+    
+    # Paginate
+    ad_requests = query.paginate(page=page, per_page=per_page)
+    
+    # Return response
+    return jsonify({
+        'ad_requests': [serialize_ad_request_detail(ar) for ar in ad_requests.items],
+        'pagination': serialize_pagination(ad_requests)
+    }), 200
+
+@app.route('/api/admin/ad_requests/<int:ad_request_id>', methods=['GET'])
+@jwt_required()
+@admin_required
+def admin_get_ad_request(ad_request_id):
+    """Get a specific ad request by ID"""
+    ad_request = db.session.get(AdRequest, ad_request_id)
+    if not ad_request:
+        return jsonify({"message": "Ad request not found"}), 404
+    
+    return jsonify(serialize_ad_request_detail(ad_request)), 200
+
+@app.route('/api/sponsor/campaigns/<int:campaign_id>/complete', methods=['PATCH'])
+@jwt_required()
+@sponsor_required
+def sponsor_complete_campaign(campaign_id):
+    """Mark a campaign as completed by the sponsor."""
+    sponsor_id = get_jwt_identity()
+    
+    # Find the campaign and verify ownership
+    campaign = Campaign.query.filter_by(id=campaign_id, sponsor_id=sponsor_id).first()
+    if not campaign:
+        return jsonify({"message": "Campaign not found or access denied"}), 404
+    
+    # Only active campaigns can be marked as completed
+    if campaign.status != 'active':
+        return jsonify({"message": f"Only active campaigns can be marked as completed. Current status: {campaign.status}"}), 400
+    
+    # Mark as completed
+    campaign.status = 'completed'
+    db.session.commit()
+    
+    return jsonify({
+        "message": "Campaign marked as completed successfully",
+        "campaign": serialize_campaign_detail(campaign)
+    }), 200
+
+# Add this function to app.py
+def check_and_update_expired_campaigns():
+    """Background task to mark campaigns as completed when their end date has passed."""
+    now = datetime.utcnow()
+    
+    # Find active campaigns with end_date in the past
+    expired_campaigns = Campaign.query.filter(
+        Campaign.status == 'active',
+        Campaign.end_date.isnot(None),
+        Campaign.end_date < now
+    ).all()
+    
+    completed_count = 0
+    for campaign in expired_campaigns:
+        campaign.status = 'completed'
+        completed_count += 1
+    
+    if completed_count > 0:
+        db.session.commit()
+        app.logger.info(f"Auto-completed {completed_count} expired campaigns")
+    
+    return completed_count
+
+# Import this in task.py and register it as a periodic task
+from celery import shared_task
+
+@shared_task
+def update_expired_campaigns():
+    """Celery task to update expired campaigns to completed status."""
+    from app import check_and_update_expired_campaigns
+    return check_and_update_expired_campaigns()

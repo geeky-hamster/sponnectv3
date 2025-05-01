@@ -2,6 +2,8 @@
 import { ref, onMounted, watch, reactive } from 'vue'
 import { sponsorService, negotiationService } from '../../services/api'
 import { RouterLink } from 'vue-router'
+import { formatCurrency } from '../../utils/formatters'
+import { formatDateWithTime } from '../../utils/dateUtils'
 
 // State
 const loading = ref(true)
@@ -80,25 +82,6 @@ const applyFilters = () => {
     
     return matchesStatus && matchesSearch
   })
-}
-
-// Format date for display
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  
-  try {
-    const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'N/A'
-    
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  } catch (e) {
-    console.error('Error formatting date:', e)
-    return 'N/A'
-  }
 }
 
 // Format currency
@@ -377,7 +360,7 @@ onMounted(() => {
                         'bg-danger': request.status === 'Rejected'
                       }">{{ request.status }}</span>
                     </td>
-                    <td>{{ formatDate(request.updated_at) }}</td>
+                    <td>{{ formatDateWithTime(request.updated_at) }}</td>
                     <td>
                       <router-link :to="`/sponsor/ad-requests/${request.id}`" class="btn btn-sm btn-outline-primary me-1">
                         View
@@ -653,7 +636,7 @@ onMounted(() => {
                                    item.action === 'negotiate' ? 'counter-offered' :
                                    item.action === 'accept' ? 'accepted' : 'rejected' }}
                               </h6>
-                              <small class="text-muted">{{ formatDate(item.created_at) }}</small>
+                              <small class="text-muted">{{ formatDateWithTime(item.created_at) }}</small>
                             </div>
                             <div class="mb-2 fw-bold">
                               Amount: {{ formatCurrency(item.payment_amount) }}

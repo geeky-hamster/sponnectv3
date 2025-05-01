@@ -144,6 +144,13 @@ const logout = () => {
 </template>
 
 <style scoped>
+.navbar {
+  background-image: url(https://i.pinimg.com/originals/89/43/2c/89432cf18889ab00675e0963a2928362.gif);
+  background-size: cover;
+}
+.nav-link{
+  color: white;
+}
 .nav-link.router-link-active {
   font-weight: bold;
   position: relative;

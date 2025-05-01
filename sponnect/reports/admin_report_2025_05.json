@@ -1,14 +1,14 @@
 {
   "total_users": 31,
-  "new_users": 2,
-  "user_growth": 0.0,
+  "new_users": 0,
+  "user_growth": -100.0,
   "active_sponsors": 10,
   "sponsor_growth": 0.0,
   "active_influencers": 20,
-  "influencer_growth": 5.3,
+  "influencer_growth": 0.0,
   "total_campaigns": 30,
-  "new_campaigns": 10,
-  "campaign_growth": 50.0,
+  "new_campaigns": 0,
+  "campaign_growth": 0.0,
   "campaign_categories": [
     {
       "name": "Uncategorized",
@@ -17,8 +17,8 @@
     }
   ],
   "total_ad_requests": 49,
-  "new_ad_requests": 45,
-  "ad_request_growth": 1125.0,
+  "new_ad_requests": 0,
+  "ad_request_growth": 0.0,
   "ad_request_statuses": [
     {
       "name": "Pending",
@@ -48,7 +48,7 @@
   ],
   "total_payments": 70840.0,
   "platform_fees": 5627.0,
-  "payment_growth": 0.0,
+  "payment_growth": -100.0,
   "platform_fee_percentage": 7.9,
   "payment_types": [
     {

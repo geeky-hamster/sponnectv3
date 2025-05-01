@@ -157,7 +157,15 @@ const authStore = useAuthStore()
 }
 
 .hero {
+  background-image: url(https://i.pinimg.com/originals/89/43/2c/89432cf18889ab00675e0963a2928362.gif);
+  background-size: cover;
   position: relative;
   overflow: hidden;
 }
+
+.cta {
+  background-image: url(https://i.pinimg.com/originals/89/43/2c/89432cf18889ab00675e0963a2928362.gif);
+  background-size: cover;
+}
+
 </style> 

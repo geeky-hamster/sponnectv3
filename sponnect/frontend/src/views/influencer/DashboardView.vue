@@ -200,3 +200,16 @@ onMounted(async () => {
     </div>
   </div>
 </template> 
+
+<style>
+.influencer-dashboard {
+  background-image: linear-gradient(#f8f9fa, #858585, #f8f9fa);
+  background-size: 1500px;
+  animation: bg_animation 20s infinite alternate;
+}
+
+@keyframes bg_animation {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 100% 0%; }
+}
+</style>  

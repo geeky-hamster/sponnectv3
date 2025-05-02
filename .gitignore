@@ -42,6 +42,7 @@ coverage
 *.local
 
 # Environment variables
+#.env
 .env.local
 .env.development.local
 .env.test.local
@@ -75,7 +76,7 @@ Thumbs.db
 *.swp
 *~.nib
 
-#celery
+# Celery
 celerybeat-schedule
 celerybeat.pid
 celerybeat.log
@@ -83,3 +84,34 @@ celerybeat.log.*
 celerybeat.pid.*
 celerybeat.pid.*
 dump.rdb
+
+# Project-specific
+backup_*/ 
+*_backup_*/ 
+frontend_backup*/
+commands.txt
+*.sh
+!run.py
+!workers.py
+
+# Compiled output
+__pycache__/
+/dist
+/build
+/.rpt2_cache/
+/.rts2_cache_cjs/
+/.rts2_cache_es/
+/.rts2_cache_umd/
+
+# Local development files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Testing
+/coverage
+/.nyc_output
+
+# Temporary report files
+reports/temp/

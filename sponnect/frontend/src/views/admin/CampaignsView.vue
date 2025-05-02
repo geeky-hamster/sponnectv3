@@ -1,7 +1,8 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { adminService } from '../../services/api'
-import { formatCurrency, formatDate } from '../../utils/formatters'
+import { formatCurrency } from '../../utils/formatters'
+import { formatDate, formatDateWithTime } from '../../utils/dateUtils'
 
 // State
 const campaigns = ref([])
@@ -12,6 +13,7 @@ const pagination = ref({
   total_items: 0
 })
 const loading = ref(true)
+const applyingFilters = ref(false)
 const error = ref('')
 const success = ref('')
 const confirmAction = ref(null)
@@ -25,7 +27,9 @@ const filters = ref({
   sponsor_id: '',
   date_range: '',
   budget_min: '',
-  budget_max: ''
+  budget_max: '',
+  flagged: false, // Add flagged filter for admin
+  sort: 'created_at_desc' // default sort
 })
 
 const campaignStatusOptions = [
@@ -38,58 +42,236 @@ const campaignStatusOptions = [
   { value: 'rejected', text: 'Rejected' }
 ]
 
-const loadCampaigns = async (page = 1) => {
-  try {
-    loading.value = true
-    error.value = ''
-    
-    // Prepare query parameters
-    const params = {
-      page,
-      per_page: pagination.value.per_page,
-      ...filters.value
-    }
-    
-    // Remove empty filters
-    Object.keys(params).forEach(key => {
-      if (params[key] === '') {
-        delete params[key]
-      }
-    })
-    
-    const response = await adminService.getCampaigns(params)
-    campaigns.value = response.data.campaigns
-    pagination.value = response.data.pagination
-  } catch (err) {
-    console.error('Error loading campaigns:', err)
-    error.value = 'Failed to load campaigns. Please try again.'
-  } finally {
-    loading.value = false
-  }
-}
+// Additional filter options
+const dateRangeOptions = [
+  { value: '', text: 'All Time' },
+  { value: 'today', text: 'Today' },
+  { value: 'yesterday', text: 'Yesterday' },
+  { value: 'this_week', text: 'This Week' },
+  { value: 'last_week', text: 'Last Week' },
+  { value: 'this_month', text: 'This Month' },
+  { value: 'last_month', text: 'Last Month' },
+  { value: 'last_3_months', text: 'Last 3 Months' },
+  { value: 'last_6_months', text: 'Last 6 Months' },
+  { value: 'this_year', text: 'This Year' }
+]
+
+const sortOptions = [
+  { value: 'created_at_desc', text: 'Newest First', field: 'created_at', order: 'desc' },
+  { value: 'created_at_asc', text: 'Oldest First', field: 'created_at', order: 'asc' },
+  { value: 'budget_desc', text: 'Budget (High to Low)', field: 'budget', order: 'desc' },
+  { value: 'budget_asc', text: 'Budget (Low to High)', field: 'budget', order: 'asc' },
+  { value: 'name_asc', text: 'Name (A-Z)', field: 'name', order: 'asc' },
+  { value: 'name_desc', text: 'Name (Z-A)', field: 'name', order: 'desc' }
+]
 
 // Watch for filter changes with debounce
 let debounceTimer
 watch(filters, () => {
   clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
+    console.log('Filters changed, reloading campaigns with filters:', filters.value);
     loadCampaigns(1) // Reset to page 1 when filters change
-  }, 300)
+  }, 500) // Slightly longer debounce for better UX
 }, { deep: true })
+
+const loadCampaigns = async (page = 1) => {
+  try {
+    loading.value = true;
+    error.value = '';
+    
+    // Prepare query parameters - only include non-empty values
+    const params = { page };
+    
+    if (pagination.value.per_page) {
+      params.per_page = pagination.value.per_page;
+    }
+    
+    // Add filter parameters with validation
+    if (filters.value.search && filters.value.search.trim()) {
+      params.search = filters.value.search.trim();
+    }
+    
+    if (filters.value.status) {
+      params.status = filters.value.status;
+    }
+    
+    if (filters.value.sponsor_id && filters.value.sponsor_id.trim()) {
+      params.sponsor_id = filters.value.sponsor_id.trim();
+    }
+    
+    if (filters.value.date_range) {
+      params.date_range = filters.value.date_range;
+    }
+    
+    // Add flagged filter if true
+    if (filters.value.flagged) {
+      params.flagged = true;
+    }
+    
+    // Ensure numeric parameters are actually numbers
+    if (filters.value.budget_min && !isNaN(parseFloat(filters.value.budget_min))) {
+      params.budget_min = parseFloat(filters.value.budget_min);
+    }
+    
+    if (filters.value.budget_max && !isNaN(parseFloat(filters.value.budget_max))) {
+      params.budget_max = parseFloat(filters.value.budget_max);
+    }
+    
+    // Add sorting
+    if (filters.value.sort) {
+      const selectedSort = sortOptions.find(opt => opt.value === filters.value.sort);
+      if (selectedSort) {
+        params.sort_by = selectedSort.field;
+        params.sort_order = selectedSort.order;
+      }
+    }
+    
+    console.log('Fetching admin campaigns with params:', params);
+    
+    // Make API call with all filters applied
+    const response = await adminService.getCampaigns(params);
+    
+    // Process response data
+    handleCampaignsResponse(response, page);
+    
+    console.log(`Loaded ${campaigns.value.length} campaigns after applying filters:`, filters.value);
+  } catch (err) {
+    handleCampaignsError(err);
+  } finally {
+    loading.value = false;
+  }
+}
+
+// Handle successful campaign response
+const handleCampaignsResponse = (response, page) => {
+  // Log response for debugging
+  console.log('Campaign response received:', {
+    status: response.status,
+    hasData: !!response.data,
+    hasCampaigns: response.data && Array.isArray(response.data.campaigns),
+    campaignCount: response.data && response.data.campaigns ? response.data.campaigns.length : 0
+  });
+  
+  // Extract campaigns from different response formats
+  let campaignData = [];
+  let paginationData = null;
+  
+  if (response.data) {
+    if (Array.isArray(response.data)) {
+      // Direct array format
+      campaignData = response.data;
+    } else if (response.data.campaigns && Array.isArray(response.data.campaigns)) {
+      // Object with campaigns field (most likely format)
+      campaignData = response.data.campaigns;
+      if (response.data.pagination) {
+        paginationData = response.data.pagination;
+      }
+    } else if (typeof response.data === 'object' && !Array.isArray(response.data) && response.data.id) {
+      // Single campaign object
+      campaignData = [response.data];
+    } else {
+      console.warn('Invalid response format:', response.data);
+      campaignData = [];
+    }
+  }
+  
+  // Ensure required fields are present with fallbacks
+  campaignData = campaignData.map(campaign => {
+    return {
+      ...campaign,
+      name: campaign.name || 'Unnamed Campaign',
+      description: campaign.description || '',
+      budget: campaign.budget || 0,
+      status: campaign.status || 'unknown',
+      created_at: campaign.created_at || new Date().toISOString()
+    };
+  });
+  
+  // Update state
+  campaigns.value = campaignData;
+  console.log('Updated campaigns list with filtered results:', campaignData.length);
+  
+  // Update pagination
+  if (paginationData) {
+    pagination.value = paginationData;
+  } else {
+    // Fallback pagination
+    pagination.value = {
+      page,
+      per_page: 10,
+      total_pages: Math.ceil(campaignData.length / 10),
+      total_items: campaignData.length
+    };
+  }
+  
+  // Log the first campaign for debugging
+  if (campaignData.length > 0) {
+    console.log('Sample campaign data:', campaignData[0]);
+  } else {
+    console.log('No campaigns returned with the current filters');
+  }
+}
+
+// Handle campaign loading errors
+const handleCampaignsError = (err) => {
+  console.error('Error loading campaigns:', err);
+  
+  // Provide more specific error messages
+  if (err.response) {
+    const status = err.response.status;
+    const errorData = err.response.data;
+    
+    if (status === 403) {
+      error.value = 'You do not have permission to view these campaigns.';
+    } else if (status === 400 && errorData && errorData.message) {
+      error.value = `Invalid search parameters: ${errorData.message}`;
+    } else if (errorData && errorData.message) {
+      error.value = errorData.message;
+    } else {
+      error.value = `Failed to load campaigns (Error ${status}). Please try again.`;
+    }
+  } else if (err.request) {
+    error.value = 'Server did not respond. Please check your connection and try again.';
+  } else {
+    error.value = `Failed to load campaigns: ${err.message}`;
+  }
+  
+  // Reset data on error
+  campaigns.value = [];
+  pagination.value = { page: 1, per_page: 10, total_pages: 1, total_items: 0 };
+}
 
 onMounted(() => {
   loadCampaigns()
 })
 
-const clearFilters = () => {
+const applyFilters = async () => {
+  console.log('Explicitly applying filters:', filters.value);
+  applyingFilters.value = true;
+  
+  // Force reload with current filters by passing page 1
+  await loadCampaigns(1); 
+  
+  applyingFilters.value = false;
+  console.log('Filters applied, loaded campaigns count:', campaigns.value.length);
+}
+
+const resetFilters = () => {
+  // Reset all filters to default values
   filters.value = {
     search: '',
     status: '',
     sponsor_id: '',
     date_range: '',
     budget_min: '',
-    budget_max: ''
-  }
+    budget_max: '',
+    flagged: false,
+    sort: 'created_at_desc' // default sort
+  };
+  
+  // Reload campaigns without filters
+  loadCampaigns(1);
 }
 
 // Campaign actions
@@ -117,17 +299,17 @@ const getActionTitle = (action) => {
 const getActionMessage = (action, campaign) => {
   switch (action) {
     case 'approve': 
-      return `Are you sure you want to approve the campaign "${campaign.title || campaign.name}"? This will make it visible to influencers.`
+      return `Are you sure you want to approve the campaign "${campaign.name}"? This will make it visible to influencers.`
     case 'reject': 
-      return `Are you sure you want to reject the campaign "${campaign.title || campaign.name}"? The sponsor will be notified.`
+      return `Are you sure you want to reject the campaign "${campaign.name}"? The sponsor will be notified.`
     case 'pause': 
-      return `Are you sure you want to pause the campaign "${campaign.title || campaign.name}"? This will temporarily hide it from influencers.`
+      return `Are you sure you want to pause the campaign "${campaign.name}"? This will temporarily hide it from influencers.`
     case 'activate': 
-      return `Are you sure you want to activate the campaign "${campaign.title || campaign.name}"? This will make it visible to influencers.`
+      return `Are you sure you want to activate the campaign "${campaign.name}"? This will make it visible to influencers.`
     case 'feature': 
-      return `Are you sure you want to feature the campaign "${campaign.title || campaign.name}"? This will show it prominently to influencers.`
+      return `Are you sure you want to feature the campaign "${campaign.name}"? This will show it prominently to influencers.`
     case 'unfeature': 
-      return `Are you sure you want to remove the featured status from "${campaign.title || campaign.name}"?`
+      return `Are you sure you want to remove the featured status from "${campaign.name}"?`
     default: 
       return 'Are you sure you want to perform this action?'
   }
@@ -137,70 +319,146 @@ const cancelAction = () => {
   confirmAction.value = null
 }
 
-const executeAction = async () => {
-  if (!confirmAction.value) return
+function getCampaignStatusBadge(status) {
+  // Convert status to lowercase string for more robust comparison
+  const statusLower = String(status || '').toLowerCase();
   
-  const { type, campaign } = confirmAction.value
+  // Map of status values to display text and badge classes
+  const statusMap = {
+    'draft': { text: 'Draft', class: 'bg-secondary' },
+    'pending_approval': { text: 'Pending Approval', class: 'bg-warning' },
+    'pending': { text: 'Pending Approval', class: 'bg-warning' },
+    'active': { text: 'Active', class: 'bg-success' },
+    'paused': { text: 'Paused', class: 'bg-info' },
+    'completed': { text: 'Completed', class: 'bg-primary' },
+    'rejected': { text: 'Rejected', class: 'bg-danger' }
+  };
+  
+  // Return mapped value or default
+  return statusMap[statusLower] || {
+    text: status ? (String(status).charAt(0).toUpperCase() + String(status).slice(1)) : 'Unknown',
+    class: 'bg-secondary'
+  };
+}
+
+// Helper function to check if campaign can be paused
+function canPauseCampaign(campaign) {
+  return campaign && campaign.status && 
+    (campaign.status.toLowerCase() === 'active' || 
+     campaign.status.toLowerCase() === 'pending_approval');
+}
+
+// Helper function to check if campaign can be activated
+function canActivateCampaign(campaign) {
+  return campaign && campaign.status && 
+    (campaign.status.toLowerCase() === 'paused' || 
+     campaign.status.toLowerCase() === 'rejected' ||
+     campaign.status.toLowerCase() === 'draft');
+}
+
+// Helper function to check if campaign can be featured
+function canFeatureCampaign(campaign) {
+  return campaign && campaign.status && 
+    campaign.status.toLowerCase() === 'active' && 
+    !campaign.is_featured;
+}
+
+// Helper function to check if campaign can be unfeatured
+function canUnfeatureCampaign(campaign) {
+  return campaign && campaign.is_featured;
+}
+
+const executeAction = async () => {
+  if (!confirmAction.value) return;
+  
+  const { type, campaign } = confirmAction.value;
   
   try {
-    loading.value = true
-    error.value = ''
-    success.value = ''
+    loading.value = true;
+    error.value = '';
+    success.value = '';
+    
+    console.log(`Executing action ${type} on campaign ID ${campaign.id}`);
+    
+    let response;
+    let newStatus;
+    let newFeatured;
     
     switch (type) {
       case 'approve':
-        await adminService.approveCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title || campaign.name}" has been approved`
-        break
+        response = await adminService.approveCampaign(campaign.id);
+        success.value = `Campaign "${campaign.name}" has been approved`;
+        newStatus = 'active';
+        break;
       case 'reject':
-        await adminService.rejectCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title || campaign.name}" has been rejected`
-        break
+        response = await adminService.rejectCampaign(campaign.id);
+        success.value = `Campaign "${campaign.name}" has been rejected`;
+        newStatus = 'rejected';
+        break;
       case 'pause':
-        await adminService.pauseCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title || campaign.name}" has been paused`
-        break
+        response = await adminService.pauseCampaign(campaign.id);
+        success.value = `Campaign "${campaign.name}" has been paused`;
+        newStatus = 'paused';
+        break;
       case 'activate':
-        await adminService.activateCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title || campaign.name}" has been activated`
-        break
+        response = await adminService.activateCampaign(campaign.id);
+        success.value = `Campaign "${campaign.name}" has been activated`;
+        newStatus = 'active';
+        break;
       case 'feature':
-        await adminService.featureCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title || campaign.name}" has been featured`
-        break
+        response = await adminService.featureCampaign(campaign.id);
+        success.value = `Campaign "${campaign.name}" has been featured`;
+        newFeatured = true;
+        break;
       case 'unfeature':
-        await adminService.unfeatureCampaign(campaign.id)
-        success.value = `Campaign "${campaign.title || campaign.name}" has been unfeatured`
-        break
+        response = await adminService.unfeatureCampaign(campaign.id);
+        success.value = `Campaign "${campaign.name}" has been unfeatured`;
+        newFeatured = false;
+        break;
     }
     
-    // Refresh the list
-    loadCampaigns(pagination.value.page)
+    console.log(`Action ${type} response:`, response);
+    
+    // Apply optimistic update for immediate feedback
+    const campaignIndex = campaigns.value.findIndex(c => c.id === campaign.id);
+    if (campaignIndex !== -1) {
+      if (newStatus) {
+        campaigns.value[campaignIndex].status = newStatus;
+      }
+      if (newFeatured !== undefined) {
+        campaigns.value[campaignIndex].is_featured = newFeatured;
+      }
+    }
+    
+    // Refresh the list after a short delay
+    setTimeout(() => {
+      loadCampaigns(pagination.page);
+    }, 500);
   } catch (err) {
-    console.error(`Error executing action ${type}:`, err)
-    error.value = `Failed to ${type} campaign. Please try again.`
+    console.error(`Error executing action ${type}:`, err);
+    
+    // Provide more specific error messages based on error type
+    if (err.response) {
+      const status = err.response.status;
+      const errorData = err.response.data;
+      
+      if (status === 403) {
+        error.value = 'You do not have permission to perform this action.';
+      } else if (status === 404) {
+        error.value = 'The campaign could not be found.';
+      } else if (errorData && errorData.message) {
+        error.value = errorData.message;
+      } else {
+        error.value = `Failed to ${type} campaign (Error ${status}). Please try again.`;
+      }
+    } else if (err.request) {
+      error.value = 'No response from server. Please check your connection and try again.';
+    } else {
+      error.value = `Failed to ${type} campaign: ${err.message}`;
+    }
   } finally {
-    loading.value = false
-    confirmAction.value = null
-  }
-}
-
-const getCampaignStatusBadge = (status) => {
-  switch (status) {
-    case 'draft':
-      return { text: 'Draft', class: 'bg-secondary' }
-    case 'pending_approval':
-      return { text: 'Pending Approval', class: 'bg-warning' }
-    case 'active':
-      return { text: 'Active', class: 'bg-success' }
-    case 'paused':
-      return { text: 'Paused', class: 'bg-info' }
-    case 'completed':
-      return { text: 'Completed', class: 'bg-primary' }
-    case 'rejected':
-      return { text: 'Rejected', class: 'bg-danger' }
-    default:
-      return { text: status, class: 'bg-secondary' }
+    loading.value = false;
+    confirmAction.value = null;
   }
 }
 
@@ -209,27 +467,19 @@ const viewCampaignDetails = (campaign) => {
   showDetailsModal.value = true
 }
 
-// Format date with time
-const formatDateWithTime = (dateString) => {
-  if (!dateString) return "N/A"
-  
-  try {
-    const date = new Date(dateString)
-    
-    // Use explicit formatting to avoid locale differences
-    const day = date.getDate().toString().padStart(2, "0")
-    const month = (date.getMonth() + 1).toString().padStart(2, "0") // Months are 0-indexed
-    const year = date.getFullYear()
-    const hours = date.getHours().toString().padStart(2, "0")
-    const minutes = date.getMinutes().toString().padStart(2, "0")
-    
-    // Format as DD-MM-YYYY HH:MM
-    return `${day}-${month}-${year} ${hours}:${minutes}`
-  } catch (e) {
-    console.error("Error formatting date:", e)
-    return "Invalid date"
-  }
-}
+// Get active filter count
+const activeFilterCount = computed(() => {
+  let count = 0;
+  if (filters.value.search) count++;
+  if (filters.value.status) count++;
+  if (filters.value.sponsor_id) count++;
+  if (filters.value.date_range) count++;
+  if (filters.value.budget_min) count++;
+  if (filters.value.budget_max) count++;
+  if (filters.value.flagged) count++;
+  if (filters.value.sort && filters.value.sort !== 'created_at_desc') count++;
+  return count;
+})
 </script>
 
 <template>
@@ -262,7 +512,10 @@ const formatDateWithTime = (dateString) => {
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
           <h5 class="card-title mb-3">
-            <i class="bi bi-funnel me-2"></i>Search Campaigns
+            <i class="bi bi-funnel me-2"></i>Filter Campaigns
+            <span v-if="activeFilterCount > 0" class="badge rounded-pill bg-primary ms-2">
+              {{ activeFilterCount }} active
+            </span>
           </h5>
           
           <div class="row g-3">
@@ -277,7 +530,7 @@ const formatDateWithTime = (dateString) => {
                   class="form-control" 
                   id="search" 
                   v-model="filters.search"
-                  placeholder="Campaign title, description..."
+                  placeholder="Campaign name or description"
                 >
               </div>
             </div>
@@ -296,62 +549,110 @@ const formatDateWithTime = (dateString) => {
             </div>
             
             <div class="col-md-4">
-              <label for="sponsor" class="form-label">Sponsor</label>
+              <label for="sponsor" class="form-label">Sponsor ID</label>
               <input 
                 type="text" 
                 class="form-control" 
                 id="sponsor" 
                 v-model="filters.sponsor_id"
-                placeholder="Sponsor ID"
+                placeholder="Enter sponsor ID"
               >
             </div>
             
             <div class="col-md-4">
               <label for="date-range" class="form-label">Date Range</label>
               <select class="form-select" id="date-range" v-model="filters.date_range">
-                <option value="">All Time</option>
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="this_week">This Week</option>
-                <option value="last_week">Last Week</option>
-                <option value="this_month">This Month</option>
-                <option value="last_month">Last Month</option>
+                <option 
+                  v-for="option in dateRangeOptions" 
+                  :key="option.value" 
+                  :value="option.value"
+                >
+                  {{ option.text }}
+                </option>
               </select>
             </div>
             
-            <div class="col-md-4">
-              <label for="budget-min" class="form-label">Min Budget</label>
-              <div class="input-group">
-                <span class="input-group-text">₹</span>
-                <input 
-                  type="number" 
-                  class="form-control" 
-                  id="budget-min" 
-                  v-model="filters.budget_min"
-                  placeholder="Min"
-                >
-              </div>
+            <div class="col-md-3">
+              <label for="budget-min" class="form-label">Min Budget (₹)</label>
+              <input 
+                type="number" 
+                class="form-control" 
+                id="budget-min" 
+                v-model="filters.budget_min"
+                placeholder="Minimum"
+                min="0"
+              >
             </div>
             
-            <div class="col-md-4">
-              <label for="budget-max" class="form-label">Max Budget</label>
-              <div class="input-group">
-                <span class="input-group-text">₹</span>
+            <div class="col-md-3">
+              <label for="budget-max" class="form-label">Max Budget (₹)</label>
+              <input 
+                type="number" 
+                class="form-control" 
+                id="budget-max" 
+                v-model="filters.budget_max"
+                placeholder="Maximum"
+                min="0"
+              >
+            </div>
+            
+            <div class="col-md-2">
+              <label class="form-label d-block">Show Flagged</label>
+              <div class="form-check form-switch mt-2">
                 <input 
-                  type="number" 
-                  class="form-control" 
-                  id="budget-max" 
-                  v-model="filters.budget_max"
-                  placeholder="Max"
+                  class="form-check-input" 
+                  type="checkbox" 
+                  id="flagged-filter"
+                  v-model="filters.flagged"
                 >
+                <label class="form-check-label" for="flagged-filter">
+                  <span v-if="filters.flagged" class="text-danger">Flagged Only</span>
+                  <span v-else class="text-muted">All Campaigns</span>
+                </label>
               </div>
             </div>
           </div>
           
-          <div class="d-flex justify-content-end mt-3">
-            <button class="btn btn-outline-secondary" @click="clearFilters">
-              <i class="bi bi-x-circle me-2"></i>Clear Filters
-            </button>
+          <div class="row mt-3">
+            <div class="col-md-8">
+              <label for="sort-by" class="form-label">Sort By</label>
+              <select class="form-select" id="sort-by" v-model="filters.sort">
+                <option 
+                  v-for="option in sortOptions" 
+                  :key="option.value" 
+                  :value="option.value"
+                >
+                  {{ option.text }}
+                </option>
+              </select>
+            </div>
+            
+            <div class="col-md-4 d-flex align-items-end">
+              <div class="d-grid gap-2 d-md-flex">
+                <button 
+                  class="btn btn-primary" 
+                  @click="applyFilters" 
+                  :disabled="applyingFilters"
+                >
+                  <span v-if="applyingFilters">
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Applying...
+                  </span>
+                  <span v-else>
+                    <i class="bi bi-funnel-fill me-1"></i>
+                    Apply Filters
+                  </span>
+                </button>
+                <button 
+                  class="btn btn-outline-secondary" 
+                  @click="resetFilters"
+                  v-if="activeFilterCount > 0"
+                >
+                  <i class="bi bi-x-circle me-1"></i>
+                  Clear Filters
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -359,22 +660,42 @@ const formatDateWithTime = (dateString) => {
       <!-- Campaign List -->
       <div class="card border-0 shadow-sm overflow-hidden">
         <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-          <h5 class="mb-0">Campaign List <span class="text-muted fs-6">({{ campaigns.length }} of {{ pagination.total_items || 0 }} campaigns)</span></h5>
+          <h5 class="mb-0">
+            Campaign List 
+            <span v-if="activeFilterCount > 0" class="badge rounded-pill bg-primary ms-2">
+              Filtered
+            </span>
+            <span class="text-muted fs-6 ms-2">
+              <span v-if="loading">
+                <div class="spinner-border spinner-border-sm text-primary me-1" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                Loading...
+              </span>
+              <span v-else-if="campaigns.length === 0">No campaigns found</span>
+              <span v-else>
+                Showing {{ campaigns.length }} of {{ pagination.total_items || 0 }} campaigns
+                <span v-if="activeFilterCount > 0">
+                  <i class="bi bi-funnel-fill text-primary ms-1"></i>
+                </span>
+              </span>
+            </span>
+          </h5>
           <div class="btn-group">
             <button 
               class="btn btn-outline-secondary btn-sm" 
               @click="loadCampaigns(pagination.page - 1)"
-              :disabled="pagination.page === 1 || loading"
+              :disabled="pagination.page <= 1 || loading"
             >
               <i class="bi bi-chevron-left"></i>
             </button>
             <button class="btn btn-outline-secondary btn-sm" disabled>
-              Page {{ pagination.page }} of {{ pagination.total_pages }}
+              Page {{ pagination.page }} of {{ pagination.total_pages || 1 }}
             </button>
             <button 
               class="btn btn-outline-secondary btn-sm" 
               @click="loadCampaigns(pagination.page + 1)"
-              :disabled="pagination.page === pagination.total_pages || loading"
+              :disabled="pagination.page >= pagination.total_pages || loading"
             >
               <i class="bi bi-chevron-right"></i>
             </button>
@@ -389,7 +710,13 @@ const formatDateWithTime = (dateString) => {
           </div>
           
           <div v-else-if="!campaigns.length" class="p-4 text-center">
-            <p class="mb-0">No campaigns found matching your filters.</p>
+            <div class="py-4">
+              <i class="bi bi-search fs-1 text-muted"></i>
+              <p class="mt-3 mb-0 text-muted">No campaigns found matching your filters.</p>
+              <button class="btn btn-outline-primary mt-3" @click="resetFilters">
+                <i class="bi bi-x-circle me-1"></i>Clear All Filters
+              </button>
+            </div>
           </div>
           
           <div v-else class="table-responsive">
@@ -409,20 +736,13 @@ const formatDateWithTime = (dateString) => {
                   <td>
                     <div class="d-flex align-items-center">
                       <div class="campaign-icon me-2">
-                        <img 
-                          v-if="campaign.image_url" 
-                          :src="campaign.image_url" 
-                          alt="Campaign" 
-                          class="img-fluid rounded" 
-                          style="width: 40px; height: 40px; object-fit: cover;"
-                        >
-                        <div v-else class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                        <div class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
                           <i class="bi bi-briefcase text-secondary"></i>
                         </div>
                       </div>
                       <div>
                         <div class="fw-semibold text-truncate" style="max-width: 200px;">
-                          {{ campaign.title || campaign.name }}
+                          {{ campaign.name }}
                           <i v-if="campaign.is_featured" class="bi bi-star-fill text-warning ms-2" title="Featured"></i>
                         </div>
                         <small class="text-muted">ID: {{ campaign.id }}</small>
@@ -449,40 +769,9 @@ const formatDateWithTime = (dateString) => {
                   </td>
                   <td>{{ formatDateWithTime(campaign.created_at) }}</td>
                   <td>
-                    <div class="dropdown">
-                      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        Actions
-                      </button>
-                      <ul class="dropdown-menu">
-                        <li>
-                          <button class="dropdown-item" @click="viewCampaignDetails(campaign)">
-                            <i class="bi bi-eye me-2"></i>View Details
-                          </button>
-                        </li>
-                        
-                        <!-- Status actions -->
-                        <li v-if="campaign.status === 'pending_approval'">
-                          <button class="dropdown-item" @click="showConfirmation('approve', campaign)">
-                            <i class="bi bi-check-circle text-success me-2"></i>Approve
-                          </button>
-                          <button class="dropdown-item" @click="showConfirmation('reject', campaign)">
-                            <i class="bi bi-x-circle text-danger me-2"></i>Reject
-                          </button>
-                        </li>
-                        
-                        <li v-if="campaign.status === 'active'">
-                          <button class="dropdown-item" @click="showConfirmation('pause', campaign)">
-                            <i class="bi bi-pause-circle text-warning me-2"></i>Pause
-                          </button>
-                        </li>
-                        
-                        <li v-if="campaign.status === 'paused' || campaign.status === 'rejected'">
-                          <button class="dropdown-item" @click="showConfirmation('activate', campaign)">
-                            <i class="bi bi-play-circle text-success me-2"></i>Activate
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
+                    <button class="btn btn-sm btn-primary" @click="viewCampaignDetails(campaign)">
+                      <i class="bi bi-eye me-2"></i>View
+                    </button>
                   </td>
                 </tr>
               </tbody>
@@ -546,7 +835,7 @@ const formatDateWithTime = (dateString) => {
               <div class="row">
                 <div class="col-md-8">
                   <div class="mb-4">
-                    <h4>{{ selectedCampaign.title || selectedCampaign.name }}</h4>
+                    <h4>{{ selectedCampaign.name }}</h4>
                     <span 
                       class="badge rounded-pill" 
                       :class="getCampaignStatusBadge(selectedCampaign.status).class"
@@ -591,10 +880,10 @@ const formatDateWithTime = (dateString) => {
                         <strong>Created:</strong> {{ formatDateWithTime(selectedCampaign.created_at) }}
                       </div>
                       <div class="mb-1">
-                        <strong>Start:</strong> {{ formatDate(selectedCampaign.start_date) || 'Not set' }}
+                        <strong>Start:</strong> {{ formatDate(selectedCampaign.start_date) }}
                       </div>
                       <div>
-                        <strong>End:</strong> {{ formatDate(selectedCampaign.end_date) || 'Not set' }}
+                        <strong>End:</strong> {{ formatDate(selectedCampaign.end_date) }}
                       </div>
                     </div>
                   </div>

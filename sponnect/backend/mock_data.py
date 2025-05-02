@@ -14,6 +14,7 @@ from faker import Faker
 from sqlalchemy import func
 from app import app
 from models import db, User, Campaign, AdRequest, NegotiationHistory, ProgressUpdate, Payment
+from constants import INDUSTRIES, CATEGORIES, INFLUENCER_CATEGORIES, INDUSTRY_TO_CATEGORY, DEFAULT_CATEGORY
 
 fake = Faker()
 
@@ -27,19 +28,11 @@ NUM_PROGRESS_UPDATES = 40
 NUM_PAYMENTS = 30
 NUM_NEGOTIATIONS = 60
 
-# Industries for sponsors
-CATEGORIES = [
-    "Technology", "Fashion", "Cosmetics", "Food & Beverage", "Travel", 
-    "Gaming", "Health & Fitness", "Automotive", "Finance", "Art", 
-    "Entertainment", "Education", "Home & Decor", "Sports", "Media", "Retail"
-]
+# Categories for campaigns - now imported from constants.py
+# CATEGORIES = CATEGORIES
 
-# Categories for influencers
-INFLUENCER_CATEGORIES = [
-    "Fashion", "Beauty", "Fitness", "Travel", "Food", "Technology", 
-    "Gaming", "Lifestyle", "Business", "Education", "Entertainment", 
-    "Health", "Sports", "Parenting", "Other"
-]
+# Categories for influencers - now imported from constants.py
+# INFLUENCER_CATEGORIES = INFLUENCER_CATEGORIES
 
 NICHES = [
     "Product Reviews", "Tutorials", "Lifestyle", "How-to Guides", 
@@ -125,13 +118,14 @@ def create_users():
     # Create sponsor users
     for i in range(NUM_SPONSORS):
         approved = random.choice([True, True, True, False])  # 75% approved
+        industry = random.choice(INDUSTRIES)
         sponsor = User(
             username=f"sponsor{i+1}",
             email=f"sponsor{i+1}@example.com",
             role="sponsor",
             is_active=True,
             company_name=fake.company(),
-            industry=random.choice(CATEGORIES),
+            industry=industry,
             sponsor_approved=approved,
             is_flagged=random.random() < 0.1,  # 10% chance of being flagged
             created_at=datetime.utcnow() - timedelta(days=random.randint(7, 365))
@@ -171,8 +165,19 @@ def create_campaigns(sponsors):
     for i in range(NUM_CAMPAIGNS):
         sponsor = random.choice([s for s in sponsors if s.role == 'sponsor' and s.sponsor_approved])
         
-        start_date = datetime.utcnow() + timedelta(days=random.randint(7, 30))
-        end_date = start_date + timedelta(days=random.randint(30, 90))
+        # Use current dates (2024) instead of future dates
+        today = datetime.utcnow()
+        # Ensure campaign start dates are in the past or very near future (max 7 days)
+        start_date = today - timedelta(days=random.randint(1, 30))
+        # End dates should be within 2024, not extending to 2025
+        end_date = today + timedelta(days=random.randint(30, min(90, (datetime(today.year, 12, 31) - today).days)))
+        
+        # Use the industry_to_category mapping for consistency
+        campaign_category = INDUSTRY_TO_CATEGORY.get(sponsor.industry, DEFAULT_CATEGORY)
+        
+        # Use valid campaign status values
+        status_choices = ['draft', 'pending_approval', 'active', 'paused', 'completed', 'rejected']
+        status = random.choice(status_choices)
         
         campaign = Campaign(
             sponsor_id=sponsor.id,
@@ -181,10 +186,12 @@ def create_campaigns(sponsors):
             budget=random.randint(5000, 100000),
             goals=fake.paragraph(),
             visibility=random.choice(['public', 'public', 'private']),  # 2/3 public
+            category=campaign_category,  # Add category from the sponsor's industry
+            status=status,
             start_date=start_date,
             end_date=end_date,
             is_flagged=random.random() < 0.1,  # 10% chance of being flagged
-            created_at=datetime.utcnow() - timedelta(days=random.randint(1, 60))
+            created_at=today - timedelta(days=random.randint(1, 60))
         )
         db.session.add(campaign)
         campaigns.append(campaign)
@@ -217,6 +224,11 @@ def create_ad_requests(campaigns, influencers):
         # Set last offer by
         last_offer_by = 'sponsor' if is_sponsor_initiated else 'influencer'
         
+        # Create an ad request with recent dates
+        now = datetime.utcnow()
+        created_at = now - timedelta(days=random.randint(1, 30))
+        updated_at = created_at + timedelta(days=random.randint(1, min(7, (now - created_at).days)))
+        
         ad_request = AdRequest(
             campaign_id=campaign.id,
             influencer_id=influencer.id,
@@ -226,8 +238,9 @@ def create_ad_requests(campaigns, influencers):
             payment_amount=payment_amount,
             requirements=fake.paragraph(3),
             last_offer_by=last_offer_by,
-            created_at=datetime.utcnow() - timedelta(days=random.randint(1, 30)),
-            updated_at=datetime.utcnow() - timedelta(days=random.randint(0, 7))
+            is_flagged=random.random() < 0.05,  # 5% chance of being flagged
+            created_at=created_at,
+            updated_at=updated_at
         )
         db.session.add(ad_request)
         ad_requests.append(ad_request)
@@ -247,15 +260,27 @@ def create_negotiations(ad_requests):
         
         for i in range(n_entries):
             # Alternate between sponsor and influencer
-            user_role = 'sponsor' if i % 2 == 0 else 'influencer'
-            user_id = ad_request.campaign.sponsor_id if user_role == 'sponsor' else ad_request.influencer_id
+            if i % 2 == 0:
+                user_id = ad_request.campaign.sponsor_id
+                user_role = 'sponsor'
+            else:
+                user_id = ad_request.influencer_id
+                user_role = 'influencer'
             
-            # Adjust price slightly
-            price_adjustment = random.uniform(0.9, 1.1)
-            payment_amount = int(ad_request.payment_amount * price_adjustment)
+            # Select an action based on the scenario
+            if i == 0:
+                action = 'propose'
+            elif i == n_entries - 1 and ad_request.status == 'Accepted':
+                action = 'accept'
+            else:
+                action = random.choice(['counter', 'propose'])
             
-            # Determine action type
-            action = random.choice(['propose', 'counter']) if i < n_entries - 1 else 'accept'
+            # Adjust payment amount for negotiations
+            payment_adjustment = random.uniform(0.9, 1.1)
+            payment_amount = ad_request.payment_amount * payment_adjustment
+            
+            # Create a negotiation history entry with recent dates
+            created_at = ad_request.created_at + timedelta(hours=random.randint(1, 24) * (i + 1))
             
             negotiation = NegotiationHistory(
                 ad_request_id=ad_request.id,
@@ -264,16 +289,11 @@ def create_negotiations(ad_requests):
                 action=action,
                 message=random.choice(NEGOTIATION_MESSAGES),
                 payment_amount=payment_amount,
-                requirements=fake.paragraph(2) if random.random() > 0.5 else None,
-                created_at=ad_request.created_at + timedelta(days=i+1)
+                requirements=ad_request.requirements if random.random() < 0.8 else fake.paragraph(),
+                created_at=created_at
             )
             db.session.add(negotiation)
             negotiations.append(negotiation)
-            
-            # Update ad request with the latest proposed price
-            if i == n_entries - 1:
-                ad_request.payment_amount = payment_amount
-                ad_request.last_offer_by = user_role
     
     db.session.commit()
     print(f"Created {len(negotiations)} negotiation history entries")
@@ -281,85 +301,116 @@ def create_negotiations(ad_requests):
 
 def create_progress_updates(ad_requests):
     """Create progress updates for accepted ad requests."""
-    eligible_requests = [ar for ar in ad_requests if ar.status == 'Accepted']
+    accepted_requests = [ar for ar in ad_requests if ar.status == 'Accepted']
     progress_updates = []
     
-    for _ in range(NUM_PROGRESS_UPDATES):
-        if not eligible_requests:
-            break
+    # Create progress updates for each accepted ad request
+    for _ in range(min(NUM_PROGRESS_UPDATES, len(accepted_requests))):
+        ad_request = random.choice(accepted_requests)
+        
+        # Generate 1-3 updates per ad request
+        n_updates = random.randint(1, 3)
+        
+        for i in range(n_updates):
+            # Determine status based on sequence
+            if i == n_updates - 1:
+                status = random.choice(['Pending', 'Approved'])
+            else:
+                status = 'Approved'
             
-        ad_request = random.choice(eligible_requests)
-        
-        # Generate 1-3 fake image URLs
-        num_images = random.randint(0, 3)
-        media_urls = ','.join([fake.image_url() for _ in range(num_images)]) if num_images > 0 else None
-        
-        # Generate fake metrics as JSON
-        metrics = {
-            'views': random.randint(1000, 100000),
-            'likes': random.randint(100, 10000),
-            'comments': random.randint(10, 1000),
-            'shares': random.randint(5, 500),
-            'clicks': random.randint(50, 5000)
-        }
-        
-        progress_update = ProgressUpdate(
-            ad_request_id=ad_request.id,
-            content=random.choice(PROGRESS_UPDATE_MESSAGES),
-            media_urls=media_urls,
-            metrics_data=json.dumps(metrics),
-            status=random.choice(['Pending', 'Approved', 'Revision Requested']),
-            feedback=fake.paragraph() if random.random() > 0.7 else None,
-            created_at=ad_request.updated_at + timedelta(days=random.randint(1, 10)),
-            updated_at=ad_request.updated_at + timedelta(days=random.randint(1, 10))
-        )
-        db.session.add(progress_update)
-        progress_updates.append(progress_update)
+            # Create sample metrics data
+            metrics = {
+                'views': random.randint(1000, 50000),
+                'likes': random.randint(100, 5000),
+                'comments': random.randint(10, 500),
+                'shares': random.randint(5, 200),
+                'clicks': random.randint(50, 2000)
+            }
+            
+            # Sample media URLs
+            media_count = random.randint(0, 3)
+            media_urls = []
+            for j in range(media_count):
+                media_urls.append(f"https://example.com/media/{ad_request.id}/{j+1}.jpg")
+            
+            # Create a progress update with recent dates
+            created_at = ad_request.updated_at + timedelta(days=random.randint(1, 7) * (i + 1))
+            if created_at > datetime.utcnow():
+                created_at = datetime.utcnow() - timedelta(hours=random.randint(1, 24))
+                
+            updated_at = created_at + timedelta(hours=random.randint(1, 24))
+            if updated_at > datetime.utcnow():
+                updated_at = datetime.utcnow()
+            
+            progress_update = ProgressUpdate(
+                ad_request_id=ad_request.id,
+                content=random.choice(PROGRESS_UPDATE_MESSAGES),
+                media_urls=','.join(media_urls),
+                metrics_data=json.dumps(metrics),
+                status=status,
+                feedback=fake.paragraph() if status == 'Revision Requested' else None,
+                created_at=created_at,
+                updated_at=updated_at
+            )
+            db.session.add(progress_update)
+            progress_updates.append(progress_update)
     
     db.session.commit()
     print(f"Created {len(progress_updates)} progress updates")
     return progress_updates
 
 def create_payments(ad_requests):
-    """Create payments for completed ad requests."""
-    completed_requests = [ar for ar in ad_requests if ar.status == 'Accepted']
+    """Create payments for accepted ad requests."""
+    accepted_requests = [ar for ar in ad_requests if ar.status == 'Accepted']
     payments = []
     
-    for ad_request in completed_requests:
-        if random.random() > 0.8:  # 80% of accepted requests have payments
-            continue
-            
-        # Calculate platform fee (5-10% of payment amount)
-        platform_fee = int(ad_request.payment_amount * random.uniform(0.05, 0.1))
-        payment_amount = ad_request.payment_amount
-        influencer_amount = payment_amount - platform_fee
+    # Create payments for each accepted ad request
+    for _ in range(min(NUM_PAYMENTS, len(accepted_requests))):
+        ad_request = random.choice(accepted_requests)
         
-        # Generate fake transaction ID
-        transaction_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=15))
+        # Determine if full or partial payment
+        is_full_payment = random.random() < 0.7  # 70% chance of full payment
         
-        # Generate fake payment response
-        payment_response = json.dumps({
-            'payment_id': transaction_id,
-            'order_id': f"order_{transaction_id}",
-            'signature': ''.join(random.choices(string.ascii_letters + string.digits, k=30)),
-            'status': 'captured',
-            'method': random.choice(['card', 'netbanking', 'wallet', 'upi']),
-            'amount': payment_amount * 100,  # In paise
-            'currency': 'INR',
+        if is_full_payment:
+            amount = ad_request.payment_amount
+        else:
+            amount = ad_request.payment_amount * random.uniform(0.3, 0.7)
+        
+        # Calculate platform fee (1% of payment)
+        platform_fee = amount * 0.01
+        influencer_amount = amount - platform_fee
+        
+        # Generate a transaction ID
+        transaction_id = f"TXN_{ad_request.id}_{int(datetime.utcnow().timestamp())}"
+        
+        # Create a payment response
+        payment_response = {
+            'status': 'success',
+            'message': 'Payment processed successfully',
+            'transaction_id': transaction_id,
             'timestamp': datetime.utcnow().isoformat()
-        })
+        }
+        
+        # Create payment with recent dates
+        created_at = ad_request.updated_at + timedelta(days=random.randint(1, 14))
+        if created_at > datetime.utcnow():
+            created_at = datetime.utcnow() - timedelta(hours=random.randint(1, 24))
+            
+        updated_at = created_at + timedelta(hours=random.randint(1, 24))
+        if updated_at > datetime.utcnow():
+            updated_at = datetime.utcnow()
         
         payment = Payment(
             ad_request_id=ad_request.id,
-            amount=payment_amount,
+            amount=amount,
             platform_fee=platform_fee,
             influencer_amount=influencer_amount,
             status='Completed',
-            payment_method=random.choice(['Razorpay', 'Bank Transfer', 'Wallet']),
+            payment_method=random.choice(['Direct', 'Credit Card', 'UPI', 'Bank Transfer']),
             transaction_id=transaction_id,
-            payment_response=payment_response,
-            created_at=ad_request.updated_at + timedelta(days=random.randint(1, 3)),
-            updated_at=ad_request.updated_at + timedelta(days=random.randint(1, 7))
+            payment_response=json.dumps(payment_response),
+            created_at=created_at,
+            updated_at=updated_at
         )
         db.session.add(payment)
         payments.append(payment)
@@ -371,42 +422,55 @@ def create_payments(ad_requests):
 def main():
     """Main function to generate mock data."""
     with app.app_context():
-        try:
-            clear_existing_data()  # This now does nothing but print a message
-            users = create_users()
-            sponsors = [u for u in users if u.role == 'sponsor']
-            influencers = [u for u in users if u.role == 'influencer']
+        print("Starting mock data generation...")
+        
+        # Check if data already exists
+        user_count = db.session.query(func.count(User.id)).scalar()
+        if user_count > 1:  # Account for admin
+            print(f"Database already contains {user_count} users")
+            response = input("Do you want to skip data generation? (y/n): ")
+            if response.lower() == 'y':
+                print("Skipping mock data generation")
+                return
             
-            campaigns = create_campaigns(sponsors)
-            ad_requests = create_ad_requests(campaigns, influencers)
-            negotiations = create_negotiations(ad_requests)
-            progress_updates = create_progress_updates(ad_requests)
-            payments = create_payments(ad_requests)
-            
-            # Calculate total monetary values
-            total_campaign_budget = sum(c.budget for c in campaigns)
-            total_payments = sum(p.amount for p in payments)
-            total_platform_fees = sum(p.platform_fee for p in payments)
-            
-            # Print summary
-            print("\nMock Data Generation Summary:")
-            print(f"- {NUM_SPONSORS} Sponsor users (username: sponsor1, password: sponsor123)")
-            print(f"- {NUM_INFLUENCERS} Influencer users (username: influencer1, password: influencer123)")
-            print(f"- {len(campaigns)} Campaigns (Total budget: ₹{total_campaign_budget:,.2f})")
-            print(f"- {len(ad_requests)} Ad Requests")
-            print(f"- {len(negotiations)} Negotiation Messages")
-            print(f"- {len(progress_updates)} Progress Updates")
-            print(f"- {len(payments)} Payments (Total: ₹{total_payments:,.2f}, Platform fees: ₹{total_platform_fees:,.2f})")
-            
-            print("\nMock data generated successfully! All currency values are in Indian Rupees (₹)")
-            print("Note: Existing database records were preserved")
-            
-        except Exception as e:
-            print(f"Error generating mock data: {e}")
-            db.session.rollback()
-            return 1
-    
-    return 0
+            response = input("Do you want to clear existing data before generating new data? (y/n): ")
+            if response.lower() == 'y':
+                print("Clearing existing data...")
+                db.session.query(Payment).delete()
+                db.session.query(ProgressUpdate).delete()
+                db.session.query(NegotiationHistory).delete()
+                db.session.query(AdRequest).delete()
+                db.session.query(Campaign).delete()
+                db.session.query(User).filter(User.role != 'admin').delete()
+                db.session.commit()
+                print("Existing data cleared")
+            else:
+                print("Will add data to existing records")
+                clear_existing_data()
+        
+        # Create users
+        users = create_users()
+        
+        # Filter out approved sponsors and influencers
+        sponsors = [u for u in users if u.role == 'sponsor']
+        influencers = [u for u in users if u.role == 'influencer']
+        
+        # Create campaigns
+        campaigns = create_campaigns(sponsors)
+        
+        # Create ad requests
+        ad_requests = create_ad_requests(campaigns, influencers)
+        
+        # Create negotiations
+        create_negotiations(ad_requests)
+        
+        # Create progress updates
+        create_progress_updates(ad_requests)
+        
+        # Create payments
+        create_payments(ad_requests)
+        
+        print("Mock data generation complete!")
 
-if __name__ == "__main__":
-    sys.exit(main()) 
+if __name__ == '__main__':
+    main() 

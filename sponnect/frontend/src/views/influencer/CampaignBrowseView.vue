@@ -185,39 +185,144 @@ const loadCampaigns = async () => {
 // Search campaigns with all filters applied
 const searchCampaigns = async () => {
   try {
-    loading.value = true
-    error.value = ''
+    loading.value = true;
+    error.value = '';
     
-    const response = await searchService.searchCampaigns({ 
-      query: filters.search,
-      category: filters.category,
-      minBudget: filters.minBudget || undefined,
-      maxBudget: filters.maxBudget || undefined,
-      sort: filters.sort
-    })
+    // Log which filters we're using for debugging purposes
+    console.log('Searching campaigns with filters:', {
+      query: filters.search || 'none',
+      category: filters.category || 'any',
+      minBudget: filters.minBudget || 'not specified',
+      maxBudget: filters.maxBudget || 'not specified',
+      sort: filters.sort || 'default'
+    });
     
-    // Handle different response formats
-    if (response.data && Array.isArray(response.data)) {
-      // Direct array format
-      campaigns.value = response.data
-    } else if (response.data && Array.isArray(response.data.campaigns)) {
-      // Object with campaigns field
-      campaigns.value = response.data.campaigns
-    } else {
-      console.error('Unexpected response format:', response.data)
-      campaigns.value = []
+    // Prepare search parameters - only include non-empty values
+    const searchParams = {};
+    
+    // Only add parameters that have valid values
+    if (filters.search && filters.search.trim()) {
+      searchParams.query = filters.search.trim();
     }
     
-    if (campaigns.value.length === 0) {
-      error.value = 'No campaigns found matching your criteria. Try adjusting your filters.'
+    if (filters.category) {
+      searchParams.category = filters.category;
+    }
+    
+    // Handle numeric parameters carefully
+    if (filters.minBudget && !isNaN(parseFloat(filters.minBudget))) {
+      searchParams.min_budget = parseFloat(filters.minBudget);
+    }
+    
+    if (filters.maxBudget && !isNaN(parseFloat(filters.maxBudget))) {
+      searchParams.max_budget = parseFloat(filters.maxBudget);
+    }
+    
+    // Add sort parameters that match backend expectations
+    if (filters.sort) {
+      switch (filters.sort) {
+        case 'latest':
+          searchParams.sort_by = 'created_at';
+          searchParams.sort_order = 'desc';
+          break;
+        case 'oldest':
+          searchParams.sort_by = 'created_at';
+          searchParams.sort_order = 'asc';
+          break;
+        case 'budget_high':
+          searchParams.sort_by = 'budget';
+          searchParams.sort_order = 'desc';
+          break;
+        case 'budget_low':
+          searchParams.sort_by = 'budget';
+          searchParams.sort_order = 'asc';
+          break;
+      }
+    }
+    
+    console.log('Calling API with search params:', searchParams);
+    
+    const response = await searchService.searchCampaigns(searchParams);
+    console.log('Search API response received:', response);
+    
+    // Extract campaigns from the response, handling different response formats
+    let campaignData = [];
+    
+    if (response.data) {
+      if (Array.isArray(response.data)) {
+        // Direct array format
+        campaignData = response.data;
+      } else if (response.data.campaigns && Array.isArray(response.data.campaigns)) {
+        // Object with campaigns field
+        campaignData = response.data.campaigns;
+      } else if (typeof response.data === 'object' && !Array.isArray(response.data)) {
+        // Check if it's a single campaign object (has id and name)
+        if (response.data.id && response.data.name) {
+          campaignData = [response.data];
+        }
+      }
+    }
+    
+    // Ensure all required fields are present with fallbacks
+    campaignData = campaignData.map(campaign => {
+      return {
+        ...campaign,
+        name: campaign.name || 'Unnamed Campaign',
+        description: campaign.description || 'No description provided',
+        budget: campaign.budget || 0,
+        category: campaign.category || 'other',
+        created_at: campaign.created_at || new Date().toISOString()
+      };
+    });
+    
+    // Update campaigns
+    campaigns.value = campaignData;
+    
+    // Display appropriate message based on results
+    if (campaignData.length === 0) {
+      error.value = 'No campaigns found matching your criteria. Try adjusting your filters.';
+    } else {
+      console.log(`Successfully found ${campaignData.length} matching campaigns`);
+      // Log first campaign for debugging
+      if (campaignData.length > 0) {
+        console.log('First campaign sample:', {
+          id: campaignData[0].id,
+          name: campaignData[0].name,
+          category: campaignData[0].category,
+          budget: campaignData[0].budget
+        });
+      }
     }
   } catch (err) {
-    console.error('Failed to search campaigns:', err)
-    error.value = 'Failed to search campaigns. Please try again.'
+    console.error('Failed to search campaigns:', err);
+    handleSearchError(err);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
+
+// Handle search errors in a consistent way
+const handleSearchError = (err) => {
+  if (err.response) {
+    const status = err.response.status;
+    if (status === 401) {
+      error.value = 'Your session has expired. Please login again.';
+    } else if (status === 403) {
+      error.value = 'You do not have permission to access these campaigns.';
+    } else if (err.response.data && err.response.data.message) {
+      error.value = err.response.data.message;
+    } else {
+      error.value = `Error ${status}: Failed to search campaigns. Please try again.`;
+    }
+  } else if (err.request) {
+    error.value = 'Server did not respond. Please check your connection and try again.';
+  } else {
+    error.value = 'Failed to search campaigns. Please try again later.';
+  }
+  
+  // Ensure campaigns is empty when there's an error
+  campaigns.value = [];
+};
 
 // Format currency
 const formatCurrency = (amount) => {
@@ -528,16 +633,11 @@ const getCategoryName = (categoryId) => {
       <div v-else class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
         <div v-for="campaign in filteredCampaigns" :key="campaign.id" class="col">
           <div class="card h-100 border-0 shadow-sm campaign-card" :title="campaign.name">
-            <!-- Campaign Image -->
-            <div class="campaign-card-img" 
-                 :style="{ backgroundImage: `url(${campaign.image_url || campaignPlaceholder})` }">
-              <div class="campaign-card-category">
-                {{ getCategoryName(campaign.category) }}
-              </div>
-            </div>
-            
             <div class="card-body">
-              <h5 class="card-title">{{ campaign.name }}</h5>
+              <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="card-title">{{ campaign.name }}</h5>
+                <span class="badge bg-primary">{{ getCategoryName(campaign.category) }}</span>
+              </div>
               
               <div class="mb-3">
                 <span class="text-primary fw-bold">{{ formatCurrency(campaign.budget) }}</span>
@@ -691,27 +791,6 @@ const getCategoryName = (categoryId) => {
 .campaign-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1) !important;
-}
-
-.campaign-card-img {
-  height: 180px;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  position: relative;
-  border-top-left-radius: 0.375rem;
-  border-top-right-radius: 0.375rem;
-}
-
-.campaign-card-category {
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  background-color: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
 }
 
 .campaign-description {

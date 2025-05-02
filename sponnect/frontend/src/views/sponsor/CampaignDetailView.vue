@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, reactive } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { sponsorService, negotiationService } from '../../services/api'
+import { formatDate } from '../../utils/dateUtils'
 
 const route = useRoute()
 const router = useRouter()
@@ -63,26 +64,6 @@ const loadCampaign = async () => {
     error.value = 'Failed to load campaign details. Please try again later.'
   } finally {
     loading.value = false
-  }
-}
-
-// Format date for display
-const formatDate = (dateString) => {
-  if (!dateString) return "N/A"
-  
-  try {
-    const date = new Date(dateString)
-    
-    // Use explicit formatting to avoid locale differences
-    const day = date.getDate().toString().padStart(2, "0")
-    const month = (date.getMonth() + 1).toString().padStart(2, "0") // Months are 0-indexed
-    const year = date.getFullYear()
-    
-    // Format as DD-MM-YYYY
-    return `${day}-${month}-${year}`
-  } catch (e) {
-    console.error("Error formatting date:", e)
-    return "Invalid date"
   }
 }
 

@@ -801,6 +801,14 @@ def admin_list_campaigns():
     # Filtering options
     name = request.args.get('name', '')
     flagged = request.args.get('flagged', '').lower() == 'true'
+    status = request.args.get('status', '')
+    sponsor_id = request.args.get('sponsor_id')
+    budget_min = request.args.get('budget_min', type=float)
+    budget_max = request.args.get('budget_max', type=float)
+    
+    # Sorting options
+    sort_by = request.args.get('sort_by', 'created_at')
+    sort_order = request.args.get('sort_order', 'desc')
     
     # Build query
     query = Campaign.query
@@ -810,9 +818,35 @@ def admin_list_campaigns():
         query = query.filter(Campaign.name.ilike(f'%{name}%'))
     if flagged:
         query = query.filter(Campaign.is_flagged == True)
+    if status:
+        query = query.filter(Campaign.status == status)
+    if sponsor_id:
+        try:
+            sponsor_id = int(sponsor_id)
+            query = query.filter(Campaign.sponsor_id == sponsor_id)
+        except (ValueError, TypeError):
+            pass  # Invalid sponsor_id, ignore filter
     
-    # Order by most recent first
-    query = query.order_by(Campaign.created_at.desc())
+    # Apply budget filters
+    if budget_min is not None:
+        query = query.filter(Campaign.budget >= budget_min)
+    if budget_max is not None:
+        query = query.filter(Campaign.budget <= budget_max)
+    
+    # Apply sorting
+    if sort_by:
+        if hasattr(Campaign, sort_by):
+            sort_attr = getattr(Campaign, sort_by)
+            if sort_order.lower() == 'asc':
+                query = query.order_by(sort_attr.asc())
+            else:
+                query = query.order_by(sort_attr.desc())
+        else:
+            # Default sort if invalid sort_by
+            query = query.order_by(Campaign.created_at.desc())
+    else:
+        # Default sort
+        query = query.order_by(Campaign.created_at.desc())
     
     # Paginate
     campaigns = query.paginate(page=page, per_page=per_page)
@@ -2768,3 +2802,59 @@ def update_expired_campaigns():
     """Celery task to update expired campaigns to completed status."""
     from app import check_and_update_expired_campaigns
     return check_and_update_expired_campaigns()
+
+@app.route('/api/charts/campaign-distribution', methods=['GET'])
+@jwt_required()
+@admin_required
+def chart_campaign_distribution():
+    """Returns distribution of campaigns by category for charts"""
+    
+    # Query to count campaigns by category
+    category_counts = db.session.query(
+        Campaign.category, 
+        func.count(Campaign.id).label('count')
+    ).group_by(Campaign.category).all()
+    
+    # Create labels and data arrays
+    labels = []
+    data = []
+    background_colors = [
+        'rgba(255, 99, 132, 0.6)',
+        'rgba(54, 162, 235, 0.6)',
+        'rgba(255, 206, 86, 0.6)',
+        'rgba(75, 192, 192, 0.6)',
+        'rgba(153, 102, 255, 0.6)',
+        'rgba(255, 159, 64, 0.6)',
+        'rgba(199, 199, 199, 0.6)',
+        'rgba(83, 102, 255, 0.6)',
+        'rgba(40, 159, 64, 0.6)',
+        'rgba(210, 199, 199, 0.6)',
+        'rgba(78, 52, 199, 0.6)',
+        'rgba(225, 99, 132, 0.6)',
+        'rgba(24, 162, 235, 0.6)',
+        'rgba(215, 206, 86, 0.6)'
+    ]
+    
+    for category, count in category_counts:
+        labels.append(category or 'Uncategorized')
+        data.append(count)
+    
+    # If there are more categories than colors, cycle through colors
+    while len(background_colors) < len(labels):
+        background_colors.extend(background_colors)
+    
+    # Limit colors to the number of categories
+    background_colors = background_colors[:len(labels)]
+    
+    # Format data for ChartJS
+    chart_data = {
+        'labels': labels,
+        'datasets': [{
+            'label': 'Campaigns by Category',
+            'data': data,
+            'backgroundColor': background_colors,
+            'borderWidth': 1
+        }]
+    }
+    
+    return jsonify(chart_data), 200

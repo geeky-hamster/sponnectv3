@@ -50,46 +50,201 @@ const sortOptions = [
 
 // Load initial campaigns
 const loadCampaigns = async () => {
-  loading.value = true
-  error.value = ''
+  loading.value = true;
+  error.value = '';
   
   try {
-    const response = await searchService.searchCampaigns({ limit: 12 })
-    campaigns.value = response.data || []
+    console.log('Loading initial campaigns...');
+    
+    const response = await searchService.searchCampaigns({ limit: 12 });
+    
+    console.log('Initial campaigns response:', response);
+    
+    // Extract campaigns array from the response
+    let campaignData = [];
+    
+    if (response.data && Array.isArray(response.data)) {
+      // Direct array format
+      campaignData = response.data;
+      console.log(`Received ${campaignData.length} campaigns (array format)`);
+    } else if (response.data && response.data.campaigns && Array.isArray(response.data.campaigns)) {
+      // Object with campaigns field
+      campaignData = response.data.campaigns;
+      console.log(`Received ${campaignData.length} campaigns (object.campaigns format)`);
+    } else if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+      // Single campaign object
+      campaignData = [response.data];
+      console.log('Received a single campaign object');
+    } else {
+      console.error('Unexpected response format:', response.data);
+      campaignData = [];
+    }
+    
+    // Update campaigns
+    campaigns.value = campaignData;
+    
+    if (campaignData.length === 0) {
+      error.value = 'No active campaigns found at this time. Please check back later.';
+    } else {
+      console.log('Successfully loaded initial campaigns');
+    }
   } catch (err) {
-    console.error('Failed to load campaigns:', err)
-    error.value = 'Failed to load campaigns. Please try again later.'
+    console.error('Failed to load campaigns:', err);
+    
+    // More informative error messages
+    if (err.response) {
+      const status = err.response.status;
+      if (status === 401) {
+        error.value = 'Your session has expired. Please login again.';
+      } else if (status === 403) {
+        error.value = 'You do not have permission to access these campaigns.';
+      } else if (err.response.data && err.response.data.message) {
+        error.value = err.response.data.message;
+      } else {
+        error.value = `Error ${status}: Failed to load campaigns. Please try again.`;
+      }
+    } else if (err.request) {
+      error.value = 'Server did not respond. Please check your connection and try again.';
+    } else {
+      error.value = 'Failed to load campaigns. Please try again later.';
+    }
+    
+    campaigns.value = [];
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 // Search for campaigns
 const searchCampaigns = async () => {
-  searching.value = true
-  error.value = ''
+  searching.value = true;
+  error.value = '';
   
   try {
-    const response = await searchService.searchCampaigns({ 
-      query: searchQuery.value,
-      category: filters.category,
-      minBudget: filters.minBudget || undefined,
-      maxBudget: filters.maxBudget || undefined,
-      sort: filters.sort,
-      limit: 20
-    })
-    campaigns.value = response.data || []
+    console.log('Searching campaigns with filters:', {
+      query: searchQuery.value || 'none',
+      category: filters.category || 'any',
+      minBudget: filters.minBudget || 'not specified',
+      maxBudget: filters.maxBudget || 'not specified',
+      sort: filters.sort || 'default'
+    });
     
-    if (campaigns.value.length === 0) {
-      error.value = 'No campaigns found matching your criteria. Try adjusting your filters.'
+    // Prepare search parameters - only include non-empty values
+    const searchParams = {
+      limit: 20 // Ensure we get a reasonable number of results
+    };
+    
+    // Only add parameters if they have valid values
+    if (searchQuery.value && searchQuery.value.trim()) {
+      searchParams.query = searchQuery.value.trim();
+    }
+    
+    if (filters.category) {
+      searchParams.category = filters.category;
+    }
+    
+    // Handle numeric parameters carefully
+    if (filters.minBudget && !isNaN(parseFloat(filters.minBudget))) {
+      searchParams.min_budget = parseFloat(filters.minBudget);
+    }
+    
+    if (filters.maxBudget && !isNaN(parseFloat(filters.maxBudget))) {
+      searchParams.max_budget = parseFloat(filters.maxBudget);
+    }
+    
+    // Add sort parameters that match backend expectations
+    if (filters.sort) {
+      switch (filters.sort) {
+        case 'latest':
+          searchParams.sort_by = 'created_at';
+          searchParams.sort_order = 'desc';
+          break;
+        case 'oldest':
+          searchParams.sort_by = 'created_at';
+          searchParams.sort_order = 'asc';
+          break;
+        case 'budget_high':
+          searchParams.sort_by = 'budget';
+          searchParams.sort_order = 'desc';
+          break;
+        case 'budget_low':
+          searchParams.sort_by = 'budget';
+          searchParams.sort_order = 'asc';
+          break;
+      }
+    }
+    
+    console.log('Calling API with search params:', searchParams);
+    
+    const response = await searchService.searchCampaigns(searchParams);
+    console.log('Search API response received:', response);
+    
+    // Extract campaigns from the response, handling different response formats
+    let campaignData = [];
+    
+    if (response.data) {
+      if (Array.isArray(response.data)) {
+        // Direct array format
+        campaignData = response.data;
+      } else if (response.data.campaigns && Array.isArray(response.data.campaigns)) {
+        // Object with campaigns field
+        campaignData = response.data.campaigns;
+      } else if (typeof response.data === 'object' && !Array.isArray(response.data)) {
+        // Check if it's a single campaign object (has id and name)
+        if (response.data.id && response.data.name) {
+          campaignData = [response.data];
+        }
+      }
+    }
+    
+    // Update campaigns state
+    campaigns.value = campaignData;
+    
+    // Display appropriate message based on results
+    if (campaignData.length === 0) {
+      error.value = 'No campaigns found matching your criteria. Try adjusting your filters.';
+    } else {
+      console.log(`Successfully found ${campaignData.length} matching campaigns`);
+      // Log first campaign for debugging
+      if (campaignData.length > 0) {
+        console.log('First campaign sample:', {
+          id: campaignData[0].id,
+          name: campaignData[0].name,
+          category: campaignData[0].category,
+          budget: campaignData[0].budget
+        });
+      }
     }
   } catch (err) {
-    console.error('Failed to search campaigns:', err)
-    error.value = 'Failed to search campaigns. Please try again.'
+    console.error('Failed to search campaigns:', err);
+    handleSearchError(err);
   } finally {
-    searching.value = false
+    searching.value = false;
   }
-}
+};
+
+// Handle search errors in a consistent way
+const handleSearchError = (err) => {
+  if (err.response) {
+    const status = err.response.status;
+    if (status === 401) {
+      error.value = 'Your session has expired. Please login again.';
+    } else if (status === 403) {
+      error.value = 'You do not have permission to access these campaigns.';
+    } else if (err.response.data && err.response.data.message) {
+      error.value = err.response.data.message;
+    } else {
+      error.value = `Error ${status}: Failed to search campaigns. Please try again.`;
+    }
+  } else if (err.request) {
+    error.value = 'Server did not respond. Please check your connection and try again.';
+  } else {
+    error.value = 'Failed to search campaigns. Please try again later.';
+  }
+  
+  // Ensure campaigns is empty when there's an error
+  campaigns.value = [];
+};
 
 // View campaign details
 const viewCampaignDetails = (campaignId) => {
@@ -123,13 +278,20 @@ const formatCurrency = (amount) => {
   }).format(amount || 0)
 }
 
-    
-    // Format as DD-MM-YYYY
+// Format as DD-MM-YYYY
+const formatDate = (dateStr) => {
+  try {
+    const date = new Date(dateStr)
+    const day = date.getDate().toString().padStart(2, '0')
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const year = date.getFullYear().toString()
     return `${day}-${month}-${year}`
   } catch (e) {
     console.error("Error formatting date:", e)
     return "Invalid date"
   }
+}
+
 const getCategoryName = (categoryId) => {
   const category = categories.find(c => c.id === categoryId)
   return category ? category.name : categoryId

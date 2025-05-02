@@ -1,7 +1,7 @@
 {
   "total_users": 31,
-  "new_users": 0,
-  "user_growth": -100.0,
+  "new_users": 1,
+  "user_growth": 0.0,
   "active_sponsors": 10,
   "sponsor_growth": 0.0,
   "active_influencers": 20,
@@ -11,14 +11,34 @@
   "campaign_growth": 0.0,
   "campaign_categories": [
     {
-      "name": "Uncategorized",
-      "count": 30,
-      "percentage": 100.0
+      "name": "automotive",
+      "count": 6,
+      "percentage": 20.0
+    },
+    {
+      "name": "fashion",
+      "count": 6,
+      "percentage": 20.0
+    },
+    {
+      "name": "finance",
+      "count": 7,
+      "percentage": 23.3
+    },
+    {
+      "name": "lifestyle",
+      "count": 3,
+      "percentage": 10.0
+    },
+    {
+      "name": "travel",
+      "count": 8,
+      "percentage": 26.7
     }
   ],
-  "total_ad_requests": 51,
-  "new_ad_requests": 1,
-  "ad_request_growth": 2.0,
+  "total_ad_requests": 50,
+  "new_ad_requests": 0,
+  "ad_request_growth": 0.0,
   "ad_request_statuses": [
     {
       "name": "Pending",
@@ -46,19 +66,19 @@
       "percentage": 0.0
     }
   ],
-  "total_payments": 84056.0,
-  "platform_fees": 6096.0,
-  "payment_growth": -43.7,
-  "platform_fee_percentage": 7.3,
+  "total_payments": 75405.3372049299,
+  "platform_fees": 754.0533720492991,
+  "payment_growth": -0.1,
+  "platform_fee_percentage": 1.0,
   "payment_types": [
     {
       "name": "Standard Campaigns",
-      "amount": 58839.2,
+      "amount": 52783.73604345093,
       "percentage": 70
     },
     {
       "name": "Premium Campaigns",
-      "amount": 25216.8,
+      "amount": 22621.60116147897,
       "percentage": 30
     }
   ]

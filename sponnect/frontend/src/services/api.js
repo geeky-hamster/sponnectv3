@@ -253,7 +253,89 @@ export const searchService = {
       page: params.page || 1
     }
   }),
-  searchCampaigns: (params) => apiService.get('/api/search/campaigns', { params })
+  searchCampaigns: (params) => {
+    console.log('Executing search campaigns with params:', params);
+    
+    // Validate parameters before sending to API
+    const cleanParams = {};
+    
+    // Only add parameters with actual values
+    if (params) {
+      if (params.query && typeof params.query === 'string' && params.query.trim()) {
+        cleanParams.query = params.query.trim();
+      }
+      
+      if (params.category && typeof params.category === 'string') {
+        cleanParams.category = params.category;
+      }
+      
+      // Handle numeric parameters
+      if (params.min_budget && !isNaN(parseFloat(params.min_budget))) {
+        cleanParams.min_budget = parseFloat(params.min_budget);
+      }
+      
+      if (params.max_budget && !isNaN(parseFloat(params.max_budget))) {
+        cleanParams.max_budget = parseFloat(params.max_budget);
+      }
+      
+      // Sorting parameters
+      if (params.sort_by) {
+        cleanParams.sort_by = params.sort_by;
+      }
+      
+      if (params.sort_order) {
+        cleanParams.sort_order = params.sort_order;
+      }
+      
+      // Pagination parameters
+      if (params.page && !isNaN(parseInt(params.page))) {
+        cleanParams.page = parseInt(params.page);
+      }
+      
+      if (params.limit && !isNaN(parseInt(params.limit))) {
+        cleanParams.limit = parseInt(params.limit);
+      }
+    }
+    
+    return apiService.get('/api/search/campaigns', { params: cleanParams })
+      .then(response => {
+        console.log('Search campaigns API response:', response);
+        
+        // Validate and normalize the response
+        if (!response.data) {
+          console.warn('Empty data received from search campaigns API');
+          return { data: [] };
+        }
+        
+        // Process the response to handle different formats
+        let campaigns = [];
+        
+        if (Array.isArray(response.data)) {
+          campaigns = response.data;
+        } else if (response.data.campaigns && Array.isArray(response.data.campaigns)) {
+          campaigns = response.data.campaigns;
+          
+          // If pagination info exists, preserve it
+          if (response.data.pagination) {
+            return {
+              data: {
+                campaigns: campaigns,
+                pagination: response.data.pagination
+              }
+            };
+          }
+        } else if (typeof response.data === 'object' && !Array.isArray(response.data) && response.data.id) {
+          // Single campaign object
+          campaigns = [response.data];
+        }
+        
+        return { data: campaigns };
+      })
+      .catch(error => {
+        console.error('Error in searchCampaigns:', error);
+        throw error;
+      });
+  }
 }
 
 // Admin Services
@@ -279,7 +361,99 @@ export const adminService = {
   getPendingUsers: () => apiService.get('/api/admin/pending_users'),
   
   // Campaign management
-  getCampaigns: (params) => apiService.get('/api/admin/campaigns', { params }),
+  getCampaigns: (params) => {
+    console.log('Executing admin getCampaigns with params:', params);
+    
+    // Validate parameters before sending to API
+    const cleanParams = {};
+    
+    // Only add parameters with actual values
+    if (params) {
+      // IMPORTANT: Admin API uses 'name' for search term instead of 'search'
+      if (params.search && typeof params.search === 'string' && params.search.trim()) {
+        cleanParams.name = params.search.trim();
+      }
+      
+      if (params.status && typeof params.status === 'string') {
+        cleanParams.status = params.status;
+      }
+      
+      if (params.sponsor_id && !isNaN(parseInt(params.sponsor_id))) {
+        cleanParams.sponsor_id = parseInt(params.sponsor_id);
+      } else if (params.sponsor_id && typeof params.sponsor_id === 'string' && params.sponsor_id.trim()) {
+        cleanParams.sponsor_id = params.sponsor_id.trim();
+      }
+      
+      // Admin API supports flagged filter
+      if (params.flagged !== undefined) {
+        cleanParams.flagged = params.flagged === true || params.flagged === 'true';
+      }
+      
+      if (params.date_range && typeof params.date_range === 'string') {
+        cleanParams.date_range = params.date_range;
+      }
+      
+      // Handle numeric parameters
+      if (params.budget_min && !isNaN(parseFloat(params.budget_min))) {
+        cleanParams.budget_min = parseFloat(params.budget_min);
+      }
+      
+      if (params.budget_max && !isNaN(parseFloat(params.budget_max))) {
+        cleanParams.budget_max = parseFloat(params.budget_max);
+      }
+      
+      // Pagination parameters
+      if (params.page && !isNaN(parseInt(params.page))) {
+        cleanParams.page = parseInt(params.page);
+      }
+      
+      if (params.per_page && !isNaN(parseInt(params.per_page))) {
+        cleanParams.per_page = parseInt(params.per_page);
+      }
+    }
+    
+    console.log('Final admin campaigns params:', cleanParams);
+    
+    return apiService.get('/api/admin/campaigns', { params: cleanParams })
+      .then(response => {
+        console.log('Admin campaigns API response:', response);
+        
+        // Validate and normalize the response
+        if (!response.data) {
+          console.warn('Empty data received from admin campaigns API');
+          return { data: { campaigns: [], pagination: { total_items: 0, total_pages: 0, page: 1, per_page: 10 } } };
+        }
+        
+        // Process the response to handle different formats
+        let campaigns = [];
+        let pagination = null;
+        
+        if (Array.isArray(response.data)) {
+          campaigns = response.data;
+        } else if (response.data.campaigns && Array.isArray(response.data.campaigns)) {
+          campaigns = response.data.campaigns;
+          
+          // If pagination info exists, preserve it
+          if (response.data.pagination) {
+            pagination = response.data.pagination;
+          }
+        } else if (typeof response.data === 'object' && !Array.isArray(response.data) && response.data.id) {
+          // Single campaign object
+          campaigns = [response.data];
+        }
+        
+        // Return data with appropriate structure
+        if (pagination) {
+          return { data: { campaigns, pagination } };
+        } else {
+          return { data: { campaigns } };
+        }
+      })
+      .catch(error => {
+        console.error('Error in admin getCampaigns:', error);
+        throw error;
+      });
+  },
   approveCampaign: (campaignId) => apiService.patch(`/api/admin/campaigns/${campaignId}/approve`),
   rejectCampaign: (campaignId) => apiService.patch(`/api/admin/campaigns/${campaignId}/reject`),
   pauseCampaign: (campaignId) => apiService.patch(`/api/admin/campaigns/${campaignId}/pause`),

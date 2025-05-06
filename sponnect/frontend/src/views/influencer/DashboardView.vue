@@ -33,7 +33,7 @@ onMounted(async () => {
 <template>
   <div class="influencer-dashboard py-5">
     <div class="container">
-      <h1 class="mb-4">Influencer Dashboard</h1>
+      <h1 class="mb-4 dashboard-title">Influencer Dashboard</h1>
       
       <div v-if="loading" class="text-center py-5">
         <div class="spinner-border text-primary" role="status">
@@ -50,42 +50,42 @@ onMounted(async () => {
         <!-- Dashboard Summary -->
         <div class="row mb-4">
           <div class="col-md-4 mb-3">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 dashboard-card gradient-purple h-100">
               <div class="card-body p-4">
-                <h5 class="card-title">Total Requests</h5>
+                <h5 class="card-title text-white">Total Requests</h5>
                 <div class="d-flex align-items-center mt-3">
-                  <div class="bg-primary rounded-circle p-3 me-3">
-                    <i class="bi bi-envelope text-white fs-4"></i>
+                  <div class="icon-container me-3">
+                    <i class="bi bi-collection text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ adRequests.length || 0 }}</h3>
+                  <h3 class="mb-0 text-white">{{ adRequests.length || 0 }}</h3>
                 </div>
               </div>
             </div>
           </div>
           
           <div class="col-md-4 mb-3">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 dashboard-card gradient-orange h-100">
               <div class="card-body p-4">
-                <h5 class="card-title">Active Negotiations</h5>
+                <h5 class="card-title text-white">Active Negotiations</h5>
                 <div class="d-flex align-items-center mt-3">
-                  <div class="bg-warning rounded-circle p-3 me-3">
-                    <i class="bi bi-chat-dots text-white fs-4"></i>
+                  <div class="icon-container me-3">
+                    <i class="bi bi-chat-square-text text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Negotiating').length : 0 }}</h3>
+                  <h3 class="mb-0 text-white">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Negotiating').length : 0 }}</h3>
                 </div>
               </div>
             </div>
           </div>
           
           <div class="col-md-4 mb-3">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 dashboard-card gradient-green h-100">
               <div class="card-body p-4">
-                <h5 class="card-title">Active Partnerships</h5>
+                <h5 class="card-title text-white">Active Partnerships</h5>
                 <div class="d-flex align-items-center mt-3">
-                  <div class="bg-success rounded-circle p-3 me-3">
-                    <i class="bi bi-check-circle text-white fs-4"></i>
+                  <div class="icon-container me-3">
+                    <i class="bi bi-stars text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Accepted').length : 0 }}</h3>
+                  <h3 class="mb-0 text-white">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Accepted').length : 0 }}</h3>
                 </div>
               </div>
             </div>
@@ -93,7 +93,7 @@ onMounted(async () => {
         </div>
         
         <!-- Ad Requests -->
-        <div class="card border-0 shadow-sm mb-4">
+        <div class="card border-0 content-card mb-4">
           <div class="card-header bg-white border-0 py-3">
             <div class="d-flex justify-content-between align-items-center">
               <h4 class="mb-0">Recent Ad Requests</h4>
@@ -147,7 +147,7 @@ onMounted(async () => {
         </div>
         
         <!-- Available Campaigns -->
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 content-card">
           <div class="card-header bg-white border-0 py-3">
             <div class="d-flex justify-content-between align-items-center">
               <h4 class="mb-0">Available Campaigns</h4>
@@ -162,7 +162,7 @@ onMounted(async () => {
             </div>
             <div v-else class="row g-4">
               <div v-for="campaign in publicCampaigns" :key="campaign.id" class="col-md-6">
-                <div class="card h-100 border-0 shadow-sm">
+                <div class="card h-100 campaign-card">
                   <div class="card-body">
                     <h5 class="card-title">{{ campaign.name }}</h5>
                     <div class="d-flex justify-content-between mb-2">
@@ -170,7 +170,7 @@ onMounted(async () => {
                       <span class="fw-bold">₹{{ campaign.budget ? campaign.budget.toLocaleString('en-IN', ) : '0' }}</span>
                     </div>
                     <p class="card-text mb-3">{{ campaign.description?.substring(0, 120) }}{{ campaign.description?.length > 120 ? '...' : '' }}</p>
-                    <router-link :to="`/campaigns/${campaign.id}`" class="btn btn-outline-primary">
+                    <router-link :to="`/campaigns/${campaign.id}`" class="btn btn-outline-primary btn-sm">
                       View Details & Apply
                     </router-link>
                   </div>
@@ -186,13 +186,70 @@ onMounted(async () => {
 
 <style>
 .influencer-dashboard {
-  background-image: linear-gradient(#f8f9fa, #858585, #f8f9fa);
-  background-size: 1500px;
-  animation: bg_animation 20s infinite alternate;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
 }
 
-@keyframes bg_animation {
-  0% { background-position: 0% 0%; }
-  100% { background-position: 100% 0%; }
+.dashboard-title {
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #7209B7;
+  padding-bottom: 0.5rem;
+  display: inline-block;
+}
+
+.dashboard-card {
+  border-radius: 12px;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
+  overflow: hidden;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 20px rgba(0,0,0,0.15);
+}
+
+.gradient-purple {
+  background: linear-gradient(135deg, #7209B7, #560BAD);
+}
+
+.gradient-orange {
+  background: linear-gradient(135deg, #F48C06, #E85D04);
+}
+
+.gradient-green {
+  background: linear-gradient(135deg, #38B000, #008000);
+}
+
+.icon-container {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.content-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: box-shadow 0.3s;
+}
+
+.content-card:hover {
+  box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+}
+
+.campaign-card {
+  border-radius: 10px;
+  border: none;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.campaign-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.1);
 }
 </style>  

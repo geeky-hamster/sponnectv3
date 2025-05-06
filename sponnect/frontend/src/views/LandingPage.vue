@@ -1,7 +1,7 @@
 <script setup>
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import bg from '../assets/bg.svg'
+//import bg from '../assets/bg.svg'
 
 const authStore = useAuthStore()
 </script>
@@ -10,6 +10,14 @@ const authStore = useAuthStore()
   <div class="landing-page">
     <!-- Hero Section -->
     <section class="hero text-white py-5">
+      <video 
+        class="hero-video" 
+        autoplay 
+        loop 
+        muted 
+        playsinline
+        src="https://video.wixstatic.com/video/11062b_0a3a288182c34d1294f46fe6a2b17df6/1080p/mp4/file.mp4">
+      </video>
       <div class="container">
         <div class="row align-items-center">
           <div class="col-lg-6">
@@ -136,7 +144,15 @@ const authStore = useAuthStore()
     </section>
 
     <!-- Call to Action -->
-    <section class="cta py-5 bg-primary text-white">
+    <section class="cta py-5 text-white">
+      <video 
+        class="cta-video" 
+        autoplay 
+        loop 
+        muted 
+        playsinline
+        src="https://video.wixstatic.com/video/11062b_0a3a288182c34d1294f46fe6a2b17df6/1080p/mp4/file.mp4">
+      </video>
       <div class="container text-center">
         <h2 class="mb-4">Ready to get started?</h2>
         <p class="lead mb-4">Join thousands of sponsors and influencers already using Sponnect</p>
@@ -160,20 +176,65 @@ const authStore = useAuthStore()
 .hero {
   position: relative;
   overflow: hidden;
-  background-image: url(https://media.istockphoto.com/id/1456442889/vector/smooth-flow-of-wavy-shape-with-gradient-vector-abstract-background-dark-blue-design-curve.jpg?s=612x612&w=0&k=20&c=0gCHz_yQX8JSwDp661DSAzYZnNSeJ8Tpb5iUH7EF4w4=);
-  background-size: cover;
-  background-position: center;
+  padding: 80px 0;
 }
 
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(33, 37, 41, 0); /* Dark overlay */
+  z-index: 1;
+}
+
+.hero-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.hero .container {
+  position: relative;
+  z-index: 2;
+}
 
 .cta {
   position: relative;
   overflow: hidden;
-  background-image: url(https://media.istockphoto.com/id/1456442889/vector/smooth-flow-of-wavy-shape-with-gradient-vector-abstract-background-dark-blue-design-curve.jpg?s=612x612&w=0&k=20&c=0gCHz_yQX8JSwDp661DSAzYZnNSeJ8Tpb5iUH7EF4w4=);
-  background-size: cover;
-  background-position: center;
+  padding: 60px 0;
 }
 
+.cta::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(13, 110, 253, 0.7); /* Primary color with opacity */
+  z-index: 1;
+}
 
+.cta-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.cta .container {
+  position: relative;
+  z-index: 2;
+}
 
 </style> 

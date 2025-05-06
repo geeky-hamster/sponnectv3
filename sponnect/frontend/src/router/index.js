@@ -24,7 +24,7 @@ const AdminDashboard = () => import('../views/admin/DashboardView.vue')
 const AdminUsers = () => import('../views/admin/UsersView.vue')
 const AdminCampaigns = () => import('../views/admin/CampaignsView.vue')
 const AdminStatistics = () => import('../views/admin/StatisticsView.vue')
-const AdminReports = () => import('../views/admin/ReportsView.vue')
+//const AdminReports = () => import('../views/admin/ReportsView.vue')
 const ProfileView = () => import('../views/ProfileView.vue')
 const InfluencerSearchView = () => import('../views/search/InfluencerSearchView.vue')
 const CampaignSearchView = () => import('../views/search/CampaignSearchView.vue')
@@ -192,12 +192,13 @@ const router = createRouter({
       component: AdminStatistics,
       meta: { requiresAuth: true, role: 'admin' }
     },
-    {
-      path: '/admin/reports',
-      name: 'admin-reports',
-      component: AdminReports,
-      meta: { requiresAuth: true, role: 'admin' }
-    },
+    
+    //{
+    //  path: '/admin/reports',
+    //  name: 'admin-reports',
+    //  component: AdminReports,
+    //  meta: { requiresAuth: true, role: 'admin' }
+    //},
     
     // 404 route
     {

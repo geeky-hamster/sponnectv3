@@ -11,6 +11,8 @@ const stats = ref({
   active_influencers: 0,
   public_campaigns: 0,
   private_campaigns: 0,
+  pending_sponsors: 0,
+  pending_influencers: 0,
   ad_requests_by_status: {
     Pending: 0,
     Negotiating: 0,
@@ -18,14 +20,7 @@ const stats = ref({
     Rejected: 0
   },
   flagged_users: 0,
-  flagged_campaigns: 0,
-  payment_stats: {
-    total_payments: 0,
-    total_platform_fees: 0,
-    total_payment_count: 0,
-    recent_fees: 0,
-    currency_symbol: '₹'
-  }
+  flagged_campaigns: 0
 })
 const pendingSponsors = ref([])
 const pendingInfluencers = ref([])
@@ -46,10 +41,9 @@ const dashboardSummary = ref({
   conversionRate: {
     value: 0,
     label: 'Acceptance Rate'
-  },
-  currencySymbol: '₹'
+  }
 })
-// Add auto-refresh interval
+// Set auto-refresh interval (10 seconds for more real-time data)
 let refreshInterval = null
 
 // Calculate the percentage for ad request status
@@ -80,7 +74,7 @@ const loadAdminData = async () => {
     loading.value = true;
     error.value = '';
     
-    // Make all API calls in parallel
+    // Make all API calls in parallel for real-time data
     const [statsResponse, pendingSponsorsResponse, pendingInfluencersResponse, pendingUsersResponse, dashboardSummaryResponse] = await Promise.all([
       adminService.getStats().catch(err => {
         console.error('Error loading stats:', err);
@@ -89,6 +83,8 @@ const loadAdminData = async () => {
             total_users: 0,
             active_sponsors: 0,
             active_influencers: 0,
+            pending_sponsors: 0,
+            pending_influencers: 0,
             public_campaigns: 0,
             private_campaigns: 0,
             ad_requests_by_status: {
@@ -98,14 +94,7 @@ const loadAdminData = async () => {
               Rejected: 0
             },
             flagged_users: 0,
-            flagged_campaigns: 0,
-            payment_stats: {
-              total_payments: 0,
-              total_platform_fees: 0,
-              total_payment_count: 0,
-              recent_fees: 0,
-              currency_symbol: '₹'
-            }
+            flagged_campaigns: 0
           }
         };
       }),
@@ -127,8 +116,7 @@ const loadAdminData = async () => {
           userSummary: { labels: [], datasets: [] },
           campaignVisibility: { labels: [], datasets: [] },
           adRequestStatus: { labels: [], datasets: [] },
-          conversionRate: { value: 0, label: 'Acceptance Rate' },
-          currencySymbol: '₹'
+          conversionRate: { value: 0, label: 'Acceptance Rate' }
         }};
       })
     ]);
@@ -138,6 +126,8 @@ const loadAdminData = async () => {
       total_users: 0,
       active_sponsors: 0,
       active_influencers: 0,
+      pending_sponsors: 0,
+      pending_influencers: 0,
       public_campaigns: 0,
       private_campaigns: 0,
       ad_requests_by_status: {
@@ -148,13 +138,6 @@ const loadAdminData = async () => {
       },
       flagged_users: 0,
       flagged_campaigns: 0,
-      payment_stats: {
-        total_payments: 0,
-        total_platform_fees: 0,
-        total_payment_count: 0,
-        recent_fees: 0,
-        currency_symbol: '₹'
-      },
       ...statsResponse.data
     };
     
@@ -202,8 +185,8 @@ onMounted(() => {
   // Load data immediately
   loadAdminData()
   
-  // Set up auto-refresh every 30 seconds
-  refreshInterval = setInterval(loadAdminData, 30000)
+  // Set up auto-refresh every 10 seconds for more real-time data
+  refreshInterval = setInterval(loadAdminData, 10000)
 })
 
 // Clean up interval when component unmounts
@@ -314,10 +297,16 @@ const rejectUser = async (user) => {
   <div class="admin-dashboard py-5">
     <div class="container">
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="text-primary">Admin Dashboard</h1>
+        <h1 class="dashboard-title">Admin Dashboard</h1>
+        <div>
+          <div class="badge bg-success me-2 d-inline-flex align-items-center">
+            <span class="me-1">Real-time</span>
+            <span class="pulse-dot"></span>
+          </div>
         <button @click="loadAdminData" class="btn btn-outline-primary" title="Refresh Dashboard">
           <i class="bi bi-arrow-clockwise me-1"></i> Refresh
         </button>
+        </div>
       </div>
       
       <!-- Error Alert -->
@@ -338,46 +327,46 @@ const rejectUser = async (user) => {
         <!-- Stats Overview -->
         <div class="row mb-4">
           <div class="col-md-4 col-sm-6 mb-3">
-            <div class="card border-0 shadow-sm h-100 card-hover">
+            <div class="card border-0 dashboard-card gradient-blue h-100">
               <div class="card-body p-4">
                 <div class="d-flex justify-content-between">
-                  <h5 class="card-title text-primary">Total Users</h5>
-                  <div class="bg-primary bg-opacity-10 rounded-circle p-2">
-                    <i class="bi bi-people text-primary fs-4"></i>
+                  <h5 class="card-title text-white">Total Users</h5>
+                  <div class="icon-container">
+                    <i class="bi bi-people-fill text-white fs-4"></i>
                   </div>
                 </div>
-                <h3 class="mt-3 mb-0 fw-bold">{{ stats.total_users }}</h3>
-                <small class="text-muted">Active accounts on platform</small>
+                <h3 class="mt-3 mb-0 fw-bold text-white">{{ stats.total_users }}</h3>
+                <small class="text-white opacity-75">Active accounts on platform</small>
               </div>
             </div>
           </div>
           
           <div class="col-md-4 col-sm-6 mb-3">
-            <div class="card border-0 shadow-sm h-100 card-hover">
+            <div class="card border-0 dashboard-card gradient-green h-100">
               <div class="card-body p-4">
                 <div class="d-flex justify-content-between">
-                  <h5 class="card-title text-success">Active Sponsors</h5>
-                  <div class="bg-success bg-opacity-10 rounded-circle p-2">
-                    <i class="bi bi-briefcase text-success fs-4"></i>
+                  <h5 class="card-title text-white">Active Sponsors</h5>
+                  <div class="icon-container">
+                    <i class="bi bi-building text-white fs-4"></i>
                   </div>
                 </div>
-                <h3 class="mt-3 mb-0 fw-bold">{{ stats.active_sponsors }}</h3>
-                <small class="text-muted">{{ pendingSponsors.length }} pending approval</small>
+                <h3 class="mt-3 mb-0 fw-bold text-white">{{ stats.active_sponsors }}</h3>
+                <small class="text-white opacity-75">{{ stats.pending_sponsors }} pending approval</small>
               </div>
             </div>
           </div>
           
           <div class="col-md-4 col-sm-6 mb-3">
-            <div class="card border-0 shadow-sm h-100 card-hover">
+            <div class="card border-0 dashboard-card gradient-purple h-100">
               <div class="card-body p-4">
                 <div class="d-flex justify-content-between">
-                  <h5 class="card-title text-info">Active Influencers</h5>
-                  <div class="bg-info bg-opacity-10 rounded-circle p-2">
-                    <i class="bi bi-person-badge text-info fs-4"></i>
+                  <h5 class="card-title text-white">Active Influencers</h5>
+                  <div class="icon-container">
+                    <i class="bi bi-person-video3 text-white fs-4"></i>
                   </div>
                 </div>
-                <h3 class="mt-3 mb-0 fw-bold">{{ stats.active_influencers }}</h3>
-                <small class="text-muted">Content creators on platform</small>
+                <h3 class="mt-3 mb-0 fw-bold text-white">{{ stats.active_influencers }}</h3>
+                <small class="text-white opacity-75">{{ stats.pending_influencers }} pending approval</small>
               </div>
             </div>
           </div>
@@ -385,31 +374,49 @@ const rejectUser = async (user) => {
 
         <div class="row mb-4">  
           <div class="col-md-4 col-sm-6 mb-3">
-            <div class="card border-0 shadow-sm h-100 card-hover">
-              <div class="card-body p-4">
-                <div class="d-flex justify-content-between">
-                  <h5 class="card-title text-warning">Platform Revenue</h5>
-                  <div class="bg-warning bg-opacity-10 rounded-circle p-2">
-                    <i class="bi bi-currency-rupee text-warning fs-4"></i>
+            <div class="card border-0 content-card h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h6 class="card-subtitle text-muted">Campaign Status</h6>
+                  <div class="icon-circle bg-primary bg-opacity-10">
+                    <i class="bi bi-bullseye text-primary"></i>
                   </div>
                 </div>
-                <h3 class="mt-3 mb-0 fw-bold">{{ formatCurrency(stats.payment_stats?.total_platform_fees || 0) }}</h3>
-                <small class="text-muted">{{ stats.payment_stats?.total_payment_count || 0 }} total payments</small>
+                <div class="d-flex align-items-center justify-content-between">
+                  <div>
+                    <h2 class="display-6 fw-bold mb-0">{{ stats.public_campaigns + stats.private_campaigns }}</h2>
+                    <small class="text-muted">Total Campaigns</small>
+              </div>
+                  <div>
+                    <div class="d-flex align-items-center mb-1">
+                      <span class="bg-success rounded-circle me-2" style="width: 8px; height: 8px;"></span>
+                      <span>Public: {{ stats.public_campaigns }}</span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                      <span class="bg-warning rounded-circle me-2" style="width: 8px; height: 8px;"></span>
+                      <span>Private: {{ stats.private_campaigns }}</span>
+                    </div>
+                  </div>
+                </div>
+                <router-link to="/admin/campaigns" class="mt-3 d-inline-block text-decoration-none">
+                  Manage Campaigns
+                  <i class="bi bi-arrow-right ms-1"></i>
+                </router-link>
               </div>
             </div>
           </div>
         
-        
           <div class="col-md-4 col-sm-6 mb-3">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 content-card h-100">
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                   <h6 class="card-subtitle text-muted">Pending Sponsors</h6>
-                  <div class="icon-circle bg-primary bg-opacity-10">
-                    <i class="bi bi-briefcase text-primary"></i>
+                  <div class="icon-circle gradient-blue-light">
+                    <i class="bi bi-building-add text-white"></i>
                   </div>
                 </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.pendingSponsors || 0 }}</h2>
+                <h2 class="display-6 fw-bold mb-0">{{ stats.pending_sponsors || 0 }}</h2>
+                <small class="text-muted">Awaiting Approval</small>
                 <router-link to="/admin/users?role=sponsor&status=pending" class="mt-3 d-inline-block text-decoration-none">
                   Manage
                   <i class="bi bi-arrow-right ms-1"></i>
@@ -419,15 +426,16 @@ const rejectUser = async (user) => {
           </div>
           
           <div class="col-md-4 col-sm-6 mb-3">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 content-card h-100">
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                   <h6 class="card-subtitle text-muted">Pending Influencers</h6>
-                  <div class="icon-circle bg-info bg-opacity-10">
-                    <i class="bi bi-person-badge text-info"></i>
+                  <div class="icon-circle gradient-purple-light">
+                    <i class="bi bi-person-video2 text-white"></i>
                   </div>
                 </div>
                 <h2 class="display-6 fw-bold mb-0">{{ stats.pending_influencers || 0 }}</h2>
+                <small class="text-muted">Awaiting Approval</small>
                 <router-link to="/admin/users?role=influencer&status=pending" class="mt-3 d-inline-block text-decoration-none">
                   Manage
                   <i class="bi bi-arrow-right ms-1"></i>
@@ -439,15 +447,15 @@ const rejectUser = async (user) => {
         <!-- Campaigns & Ad Requests -->
         <div class="row mb-4">
           <div class="col-md-6 mb-3">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 content-card h-100">
               <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                 <h4 class="mb-0 text-primary">Campaigns</h4>
-                <router-link to="/admin/campaigns" class="btn btn-sm btn-outline-primary">View All</router-link>
+                <router-link to="/admin/campaigns" class="btn btn-sm btn-primary">View All</router-link>
               </div>
-              <div class="card-body">
+              <div class="card-body campaign-card-body">
                 <div class="d-flex align-items-center mb-4">
                   <div class="me-4">
-                    <div class="position-relative d-inline-block">
+                    <div class="position-relative d-inline-block campaign-chart">
                       <svg width="100" height="100" viewBox="0 0 100 100">
                         <circle cx="50" cy="50" r="45" fill="none" stroke="#e9ecef" stroke-width="10" />
                         <circle 
@@ -462,22 +470,22 @@ const rejectUser = async (user) => {
                           transform="rotate(-90 50 50)"
                         />
                       </svg>
-                      <div class="position-absolute top-50 start-50 translate-middle text-center">
+                      <div class="position-absolute top-50 start-50 translate-middle text-center campaign-count">
                         <h4 class="mb-0">{{ stats.public_campaigns + stats.private_campaigns }}</h4>
                         <small>Total</small>
                       </div>
                     </div>
                   </div>
-                  <div>
-                    <div class="mb-2">
-                      <div class="d-flex align-items-center">
+                  <div class="campaign-stats">
+                    <div class="mb-3">
+                      <div class="d-flex align-items-center campaign-stat-item">
                         <span class="bg-primary rounded-circle me-2" style="width: 12px; height: 12px;"></span>
                         <span class="me-2">Public:</span>
                         <span class="fw-bold">{{ stats.public_campaigns || 0 }}</span>
                       </div>
                     </div>
                     <div>
-                      <div class="d-flex align-items-center">
+                      <div class="d-flex align-items-center campaign-stat-item">
                         <span class="bg-secondary rounded-circle me-2" style="width: 12px; height: 12px;"></span>
                         <span class="me-2">Private:</span>
                         <span class="fw-bold">{{ stats.private_campaigns || 0 }}</span>
@@ -485,19 +493,19 @@ const rejectUser = async (user) => {
                     </div>
                   </div>
                 </div>
-                <div class="row text-center">
+                <div class="row text-center g-3">
                   <div class="col-6">
-                    <div class="card bg-light border-0">
-                      <div class="card-body py-2">
-                        <h6 class="text-muted mb-1">Flagged</h6>
+                    <div class="card bg-light border-0 campaign-stat-card">
+                      <div class="card-body py-3">
+                        <h6 class="text-danger mb-1">Flagged</h6>
                         <h4 class="mb-0">{{ stats.flagged_campaigns || 0 }}</h4>
                       </div>
                     </div>
                   </div>
                   <div class="col-6">
-                    <div class="card bg-light border-0">
-                      <div class="card-body py-2">
-                        <h6 class="text-muted mb-1">Avg. Budget</h6>
+                    <div class="card bg-light border-0 campaign-stat-card">
+                      <div class="card-body py-3">
+                        <h6 class="text-primary mb-1">Avg. Budget</h6>
                         <h4 class="mb-0">{{ formatCurrency(5000) }}</h4> <!-- Placeholder - replace with actual data if available -->
                       </div>
                     </div>
@@ -508,38 +516,39 @@ const rejectUser = async (user) => {
           </div>
           
           <div class="col-md-6 mb-3">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-header bg-white border-0 py-3">
+            <div class="card border-0 content-card h-100">
+              <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                 <h4 class="mb-0 text-primary">Ad Request Status</h4>
+                <router-link to="/admin/engagements" class="btn btn-sm btn-primary">Manage</router-link>
               </div>
               <div class="card-body">
                 <div v-if="stats && stats.ad_requests_by_status" class="mb-3">
-                  <div class="progress rounded-pill mb-4" style="height: 1.5rem;">
+                  <div class="progress rounded-pill mb-4 status-progress" style="height: 1.5rem;">
                     <div class="progress-bar bg-warning text-dark" 
                          :style="`width: ${getStatusPercentage('Pending')}%`" 
                          role="progressbar">
-                      Pending
+                      <span class="status-label">Pending</span>
                     </div>
                     <div class="progress-bar bg-info" 
                          :style="`width: ${getStatusPercentage('Negotiating')}%`" 
                          role="progressbar">
-                      Negotiating
+                      <span class="status-label">Negotiating</span>
                     </div>
                     <div class="progress-bar bg-success" 
                          :style="`width: ${getStatusPercentage('Accepted')}%`" 
                          role="progressbar">
-                      Accepted
+                      <span class="status-label">Accepted</span>
                     </div>
                     <div class="progress-bar bg-danger" 
                          :style="`width: ${getStatusPercentage('Rejected')}%`" 
                          role="progressbar">
-                      Rejected
+                      <span class="status-label">Rejected</span>
                     </div>
                   </div>
                   
                   <div class="row mt-4">
                     <div class="col-6 col-md-3 mb-3">
-                      <div class="d-flex align-items-center">
+                      <div class="status-badge-container">
                         <span class="badge bg-warning p-2 me-2"></span>
                         <div>
                           <div class="small text-muted">Pending</div>
@@ -548,7 +557,7 @@ const rejectUser = async (user) => {
                       </div>
                     </div>
                     <div class="col-6 col-md-3 mb-3">
-                      <div class="d-flex align-items-center">
+                      <div class="status-badge-container">
                         <span class="badge bg-info p-2 me-2"></span>
                         <div>
                           <div class="small text-muted">Negotiating</div>
@@ -557,7 +566,7 @@ const rejectUser = async (user) => {
                       </div>
                     </div>
                     <div class="col-6 col-md-3 mb-3">
-                      <div class="d-flex align-items-center">
+                      <div class="status-badge-container">
                         <span class="badge bg-success p-2 me-2"></span>
                         <div>
                           <div class="small text-muted">Accepted</div>
@@ -566,11 +575,207 @@ const rejectUser = async (user) => {
                       </div>
                     </div>
                     <div class="col-6 col-md-3 mb-3">
-                      <div class="d-flex align-items-center">
+                      <div class="status-badge-container">
                         <span class="badge bg-danger p-2 me-2"></span>
                         <div>
                           <div class="small text-muted">Rejected</div>
                           <div class="fw-bold">{{ stats.ad_requests_by_status.Rejected || 0 }}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="adrequest-summary mt-3 pt-3 border-top">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div>
+                        <span class="text-muted">Total Requests:</span>
+                        <span class="ms-2 fw-bold">{{ Object.values(stats.ad_requests_by_status || {}).reduce((sum, val) => sum + val, 0) }}</span>
+                      </div>
+                      <div>
+                        <span class="text-muted">Acceptance Rate:</span>
+                        <span class="ms-2 badge rounded-pill" :class="calculatePercentage('Accepted') > 50 ? 'bg-success' : 'bg-warning'">
+                          {{ calculatePercentage('Accepted') }}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Data Insights Section -->
+        <div class="row mb-4">
+          <div class="col-md-6 mb-3">
+            <div class="card border-0 content-card h-100">
+              <div class="card-header bg-white border-0">
+                <h5 class="mb-0">Ad Request Status Distribution</h5>
+              </div>
+              <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-center">
+                  <div class="position-relative chart-container-custom" style="width: 200px; height: 200px;">
+                    <svg width="200" height="200" viewBox="0 0 200 200">
+                      <!-- Background circle -->
+                      <circle cx="100" cy="100" r="80" fill="none" stroke="#e9ecef" stroke-width="20" />
+                      
+                      <!-- Acceptance Rate -->
+                      <circle 
+                        cx="100" 
+                        cy="100" 
+                        r="80" 
+                        fill="none" 
+                        stroke="#28a745" 
+                        stroke-width="20"
+                        stroke-dasharray="503"
+                        :stroke-dashoffset="503 - (503 * calculatePercentage('Accepted') / 100)"
+                        transform="rotate(-90 100 100)"
+                      />
+                      
+                      <!-- Negotiation Rate -->
+                      <circle 
+                        cx="100" 
+                        cy="100" 
+                        r="80" 
+                        fill="none" 
+                        stroke="#ffc107" 
+                        stroke-width="20"
+                        stroke-dasharray="503"
+                        :stroke-dashoffset="503 - (503 * calculatePercentage('Negotiating') / 100)"
+                        transform="rotate(-90 100 100)"
+                        style="stroke-dasharray: 503; opacity: 0.8"
+                      />
+                      
+                      <!-- Pending Rate -->
+                      <circle 
+                        cx="100" 
+                        cy="100" 
+                        r="80" 
+                        fill="none" 
+                        stroke="#007bff" 
+                        stroke-width="20"
+                        stroke-dasharray="503"
+                        :stroke-dashoffset="503 - (503 * calculatePercentage('Pending') / 100)"
+                        transform="rotate(-90 100 100)"
+                        style="stroke-dasharray: 503; opacity: 0.7"
+                      />
+                      
+                      <!-- Rejection Rate -->
+                      <circle 
+                        cx="100" 
+                        cy="100" 
+                        r="80" 
+                        fill="none" 
+                        stroke="#dc3545" 
+                        stroke-width="20"
+                        stroke-dasharray="503"
+                        :stroke-dashoffset="503 - (503 * calculatePercentage('Rejected') / 100)"
+                        transform="rotate(-90 100 100)"
+                        style="stroke-dasharray: 503; opacity: 0.6"
+                      />
+                    </svg>
+                    <div class="position-absolute top-50 start-50 translate-middle text-center total-count">
+                      <h4 class="mb-0">{{ Object.values(stats.ad_requests_by_status || {}).reduce((sum, val) => sum + val, 0) }}</h4>
+                      <small class="text-muted">Total</small>
+                    </div>
+                  </div>
+                  
+                  <div class="ms-4">
+                    <div class="mb-2">
+                      <div class="d-flex align-items-center status-item">
+                        <span class="badge bg-success p-2 me-2"></span>
+                        <span>Accepted: {{ stats.ad_requests_by_status?.Accepted || 0 }} ({{ calculatePercentage('Accepted') }}%)</span>
+                      </div>
+                    </div>
+                    <div class="mb-2">
+                      <div class="d-flex align-items-center status-item">
+                        <span class="badge bg-warning p-2 me-2"></span>
+                        <span>Negotiating: {{ stats.ad_requests_by_status?.Negotiating || 0 }} ({{ calculatePercentage('Negotiating') }}%)</span>
+                      </div>
+                    </div>
+                    <div class="mb-2">
+                      <div class="d-flex align-items-center status-item">
+                        <span class="badge bg-primary p-2 me-2"></span>
+                        <span>Pending: {{ stats.ad_requests_by_status?.Pending || 0 }} ({{ calculatePercentage('Pending') }}%)</span>
+                      </div>
+                    </div>
+                    <div>
+                      <div class="d-flex align-items-center status-item">
+                        <span class="badge bg-danger p-2 me-2"></span>
+                        <span>Rejected: {{ stats.ad_requests_by_status?.Rejected || 0 }} ({{ calculatePercentage('Rejected') }}%)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-6 mb-3">
+            <div class="card border-0 content-card h-100">
+              <div class="card-header bg-white border-0">
+                <h5 class="mb-0">Platform Activity</h5>
+              </div>
+              <div class="card-body">
+                <div class="row g-3">
+                  <div class="col-sm-6">
+                    <div class="activity-card bg-primary-gradient">
+                      <div class="card-body p-3">
+                        <div class="d-flex justify-content-between">
+                          <div>
+                            <h6 class="text-white mb-1">Current Users</h6>
+                            <h4 class="mb-0 text-white">{{ stats.total_users }}</h4>
+                          </div>
+                          <div class="activity-icon">
+                            <i class="bi bi-person-lines-fill text-white"></i>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="col-sm-6">
+                    <div class="activity-card bg-success-gradient">
+                      <div class="card-body p-3">
+                        <div class="d-flex justify-content-between">
+                          <div>
+                            <h6 class="text-white mb-1">Campaign Conversion</h6>
+                            <h4 class="mb-0 text-white">{{ Math.round(dashboardSummary.conversionRate?.value || 0) }}%</h4>
+                          </div>
+                          <div class="activity-icon">
+                            <i class="bi bi-graph-up text-white"></i>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="col-sm-6">
+                    <div class="activity-card bg-warning-gradient">
+                      <div class="card-body p-3">
+                        <div class="d-flex justify-content-between">
+                          <div>
+                            <h6 class="text-white mb-1">Active Campaigns</h6>
+                            <h4 class="mb-0 text-white">{{ stats.public_campaigns + stats.private_campaigns }}</h4>
+                          </div>
+                          <div class="activity-icon">
+                            <i class="bi bi-broadcast-pin text-white"></i>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="col-sm-6">
+                    <div class="activity-card bg-danger-gradient">
+                      <div class="card-body p-3">
+                        <div class="d-flex justify-content-between">
+                          <div>
+                            <h6 class="text-white mb-1">Flagged Content</h6>
+                            <h4 class="mb-0 text-white">{{ stats.flagged_campaigns + stats.flagged_users }}</h4>
+                          </div>
+                          <div class="activity-icon">
+                            <i class="bi bi-shield-exclamation text-white"></i>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -585,53 +790,42 @@ const rejectUser = async (user) => {
         
         
         <!-- Quick Actions Card -->
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 content-card">
           <div class="card-header bg-white border-0 py-3">
             <h4 class="mb-0 text-primary">Quick Actions</h4>
           </div>
           <div class="card-body">
             <div class="row g-3">
-              <div class="col-md-3 col-sm-6">
-                <router-link to="/admin/users" class="card border-0 shadow-sm text-decoration-none card-hover h-100">
+              <div class="col-md-4 col-sm-6">
+                <router-link to="/admin/users" class="action-card h-100">
                   <div class="card-body text-center p-4">
-                    <div class="bg-primary bg-opacity-10 rounded-circle p-3 mx-auto mb-3" style="width: fit-content">
-                      <i class="bi bi-people-fill text-primary fs-3"></i>
+                    <div class="action-icon bg-primary">
+                      <i class="bi bi-people-fill text-white fs-3"></i>
                     </div>
-                    <h5 class="text-primary">Manage Users</h5>
+                    <h5 class="text-primary mt-3">Manage Users</h5>
                     <p class="text-muted mb-0 small">View and manage platform users</p>
                   </div>
                 </router-link>
               </div>
-              <div class="col-md-3 col-sm-6">
-                <router-link to="/admin/campaigns" class="card border-0 shadow-sm text-decoration-none card-hover h-100">
+              <div class="col-md-4 col-sm-6">
+                <router-link to="/admin/campaigns" class="action-card h-100">
                   <div class="card-body text-center p-4">
-                    <div class="bg-success bg-opacity-10 rounded-circle p-3 mx-auto mb-3" style="width: fit-content">
-                      <i class="bi bi-megaphone-fill text-success fs-3"></i>
+                    <div class="action-icon bg-success">
+                      <i class="bi bi-bullseye text-white fs-3"></i>
                     </div>
-                    <h5 class="text-success">Campaigns</h5>
+                    <h5 class="text-success mt-3">Campaigns</h5>
                     <p class="text-muted mb-0 small">Manage and moderate campaigns</p>
                   </div>
                 </router-link>
               </div>
-              <div class="col-md-3 col-sm-6">
-                <router-link to="/admin/statistics" class="card border-0 shadow-sm text-decoration-none card-hover h-100">
+              <div class="col-md-4 col-sm-6">
+                <router-link to="/admin/statistics" class="action-card h-100">
                   <div class="card-body text-center p-4">
-                    <div class="bg-info bg-opacity-10 rounded-circle p-3 mx-auto mb-3" style="width: fit-content">
-                      <i class="bi bi-graph-up text-info fs-3"></i>
+                    <div class="action-icon bg-info">
+                      <i class="bi bi-bar-chart-line-fill text-white fs-3"></i>
                     </div>
-                    <h5 class="text-info">Analytics</h5>
+                    <h5 class="text-info mt-3">Analytics</h5>
                     <p class="text-muted mb-0 small">View detailed platform statistics</p>
-                  </div>
-                </router-link>
-              </div>
-              <div class="col-md-3 col-sm-6">
-                <router-link to="/admin/platform-fees" class="card border-0 shadow-sm text-decoration-none card-hover h-100">
-                  <div class="card-body text-center p-4">
-                    <div class="bg-warning bg-opacity-10 rounded-circle p-3 mx-auto mb-3" style="width: fit-content">
-                      <i class="bi bi-cash-stack text-warning fs-3"></i>
-                    </div>
-                    <h5 class="text-warning">Revenue</h5>
-                    <p class="text-muted mb-0 small">Track platform earnings and fees</p>
                   </div>
                 </router-link>
               </div>
@@ -639,112 +833,78 @@ const rejectUser = async (user) => {
           </div>
         </div>
         
-        <!-- Pending Approvals Panel -->
-        <div class="card border-0 shadow-sm mb-4">
+        <!-- Pending Approvals Section -->
+        <div class="row mb-4">
+          <div class="col-12">
+            <div class="card border-0 content-card">
           <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-            <h4 class="mb-0 text-primary">Pending Approvals</h4>
-            <span class="badge bg-warning rounded-pill">{{ pendingUsers.length }} users</span>
+                <h4 class="mb-0">Pending Approvals</h4>
+                <router-link to="/admin/users?status=pending" class="btn btn-sm btn-outline-primary">View All</router-link>
           </div>
           <div class="card-body p-0">
-            <div v-if="pendingUsers.length === 0" class="text-center py-4">
-              <i class="bi bi-check-circle-fill text-success fs-1"></i>
-              <p class="mt-2 text-muted">No pending approval requests</p>
-            </div>
-            <div v-else class="table-responsive">
-              <table class="table mb-0">
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th>Name</th>
-                    <th>Role</th>
-                    <th>Email</th>
-                    <th>Joined</th>
-                    <th>Actions</th>
+                        <th scope="col" style="width: 40px;"></th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Role</th>
+                        <th scope="col">Registered</th>
+                        <th scope="col" class="text-end">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
+                      <tr v-if="loading && pendingUsers.length === 0">
+                        <td colspan="6" class="text-center py-4">
+                          <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr v-else-if="pendingUsers.length === 0">
+                        <td colspan="6" class="text-center py-4">
+                          <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-2"></i>
+                          <p class="mb-0">No pending approvals at the moment!</p>
+                        </td>
+                      </tr>
                   <tr v-for="user in pendingUsers.slice(0, 5)" :key="user.id">
                     <td>
-                      <div class="d-flex align-items-center">
-                        <div class="avatar-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center me-2" 
-                             style="width: 36px; height: 36px; font-size: 16px;">
-                          {{ (user.username && user.username.charAt(0).toUpperCase()) || 'U' }}
-                        </div>
-                        {{ user.username || 'Unknown User' }}
-                      </div>
+                          <i v-if="user.role === 'sponsor'" class="bi bi-briefcase text-primary"></i>
+                          <i v-else-if="user.role === 'influencer'" class="bi bi-person-badge text-info"></i>
                     </td>
                     <td>
-                      <span :class="`badge ${user.role === 'sponsor' ? 'bg-primary' : 'bg-info'}`">
-                        {{ user.role || 'unknown' }}
-                      </span>
+                          <strong>{{ user.username }}</strong><br>
+                          <small class="text-muted">{{ user.company_name || user.influencer_name || 'N/A' }}</small>
                     </td>
-                    <td>{{ user.email || 'N/A' }}</td>
-                    <td>{{ formatDate(user.created_at) }}</td>
-                    <td>
-                      <div class="btn-group btn-group-sm">
-                        <router-link :to="`/admin/users/${user.id}`" class="btn btn-outline-primary">
-                          <i class="bi bi-eye"></i>
-                        </router-link>
-                        <button class="btn btn-outline-success" @click="approveUser(user)">
-                          <i class="bi bi-check-lg"></i>
+                        <td>{{ user.email }}</td>
+                        <td>
+                          <span v-if="user.role === 'sponsor'" class="badge bg-primary">Sponsor</span>
+                          <span v-else-if="user.role === 'influencer'" class="badge bg-info">Influencer</span>
+                        </td>
+                        <td>{{ formatDate(user.created_at) }}</td>
+                        <td class="text-end">
+                          <button @click="approveUser(user)" class="btn btn-sm btn-success me-1">
+                            <i class="bi bi-check-lg"></i> Approve
                         </button>
-                        <button class="btn btn-outline-danger" @click="rejectUser(user)">
-                          <i class="bi bi-x-lg"></i>
+                          <button @click="rejectUser(user)" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-x-lg"></i> Reject
                         </button>
-                      </div>
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div v-if="pendingUsers.length > 5" class="text-center py-3 border-top">
-              <router-link to="/admin/users?status=pending" class="btn btn-sm btn-outline-primary">
+                <div v-if="pendingUsers.length > 5" class="text-center p-3 border-top">
+                  <router-link to="/admin/users?status=pending" class="text-decoration-none">
                 View all {{ pendingUsers.length }} pending users
               </router-link>
             </div>
           </div>
         </div>
-
-        <!-- Add a new Stats Card for Flagged Content -->
-        <div class="col-md-6 col-xl-3 mb-4">
-          <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-start">
-                <div>
-                  <h6 class="text-uppercase text-muted fw-semibold mb-2">Flagged Content</h6>
-                  <h3 class="fw-bold mb-2">
-                    {{ stats.flagged_users + stats.flagged_campaigns || 0 }}
-                  </h3>
                 </div>
-                <div class="icon-shape bg-danger-subtle text-danger rounded-3 p-3">
-                  <i class="bi bi-flag-fill"></i>
                 </div>
               </div>
-              <div class="mt-2">
-                <span 
-                  v-if="stats.flagged_users > 0"
-                  class="badge bg-danger me-2"
-                  :title="`${stats.flagged_users} flagged users`"
-                >
-                  {{ stats.flagged_users }} Users
-                </span>
-                <span 
-                  v-if="stats.flagged_campaigns > 0"
-                  class="badge bg-danger"
-                  :title="`${stats.flagged_campaigns} flagged campaigns`"
-                >
-                  {{ stats.flagged_campaigns }} Campaigns
-                </span>
-              </div>
-              <router-link to="/admin/users?flagged=true" class="btn btn-sm btn-outline-danger mt-3 me-2">
-                <i class="bi bi-person-fill-x me-1"></i>View Flagged Users
-              </router-link>
-              <router-link to="/admin/campaigns?flagged=true" class="btn btn-sm btn-outline-danger mt-3">
-                <i class="bi bi-flag-fill me-1"></i>View Flagged Campaigns
-              </router-link>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -754,13 +914,232 @@ const rejectUser = async (user) => {
   animation: fadeIn 0.5s ease-in-out;
 }
 
-.card-hover {
-  transition: transform 0.2s, box-shadow 0.2s;
+.dashboard-title {
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: #4361ee;
+  position: relative;
+  padding-bottom: 0.5rem;
+  display: inline-block;
 }
 
-.card-hover:hover {
+.dashboard-title::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 80px;
+  height: 3px;
+  background: linear-gradient(to right, #4361ee, #3a0ca3);
+}
+
+.dashboard-card {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.dashboard-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 12px 20px rgba(0,0,0,0.15);
+}
+
+.content-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: box-shadow 0.3s, transform 0.3s;
+}
+
+.content-card:hover {
+  box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+  transform: translateY(-3px);
+}
+
+.gradient-blue {
+  background: linear-gradient(135deg, #4361ee, #3a0ca3);
+}
+
+.gradient-green {
+  background: linear-gradient(135deg, #4cc9f0, #4895ef);
+}
+
+.gradient-purple {
+  background: linear-gradient(135deg, #7209b7, #560bad);
+}
+
+.gradient-blue-light {
+  background: linear-gradient(135deg, #4361ee, #3f37c9);
+}
+
+.gradient-purple-light {
+  background: linear-gradient(135deg, #7209b7, #560bad);
+}
+
+.icon-container {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #fff;
+  position: relative;
+  animation: pulse 1.5s infinite;
+}
+
+.activity-card {
+  border-radius: 12px;
+  border: none;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+  transition: transform 0.3s;
+}
+
+.activity-card:hover {
+  transform: translateY(-3px);
+}
+
+.bg-primary-gradient {
+  background: linear-gradient(135deg, #4361ee, #3a0ca3);
+}
+
+.bg-success-gradient {
+  background: linear-gradient(135deg, #4cc9f0, #4895ef);
+}
+
+.bg-warning-gradient {
+  background: linear-gradient(135deg, #f48c06, #e85d04);
+}
+
+.bg-danger-gradient {
+  background: linear-gradient(135deg, #ef476f, #d90429);
+}
+
+.action-card {
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: transform 0.3s, box-shadow 0.3s;
+  border: none;
+  text-decoration: none;
+  display: block;
+  background-color: white;
+}
+
+.action-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+}
+
+.activity-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s;
+}
+
+.activity-card:hover .activity-icon {
+  transform: scale(1.1);
+}
+
+.status-progress {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s;
+}
+
+.status-progress:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.status-badge-container {
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  border-radius: 8px;
+  transition: background-color 0.3s;
+}
+
+.status-badge-container:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.status-item {
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background-color 0.3s, transform 0.2s;
+}
+
+.status-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  transform: translateX(3px);
+}
+
+.chart-container-custom {
+  transition: transform 0.3s;
+}
+
+.chart-container-custom:hover {
+  transform: scale(1.05);
+}
+
+.action-icon {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  transition: transform 0.3s;
+}
+
+.action-card:hover .action-icon {
+  transform: scale(1.1);
+}
+
+.total-count {
+  transition: transform 0.3s;
+}
+
+.chart-container-custom:hover .total-count {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(255, 255, 255, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
 }
 
 @keyframes fadeIn {

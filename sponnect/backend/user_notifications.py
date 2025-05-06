@@ -58,7 +58,7 @@ def send_minute_activity_update():
         <p>Best regards,<br>The Sponnect System</p>
         """
         
-        send_email(admin.email, subject, body)
+        send_email(subject, admin.email, body)
     
     # SEND TO SPONSORS
     # For each sponsor, include info about their campaigns and pending requests
@@ -87,7 +87,7 @@ def send_minute_activity_update():
             <p>Best regards,<br>The Sponnect Team</p>
             """
             
-            send_email(sponsor.email, subject, body)
+            send_email(subject, sponsor.email, body)
     
     # SEND TO INFLUENCERS
     # For each influencer, include matching campaigns and pending applications
@@ -121,7 +121,7 @@ def send_minute_activity_update():
             <p>Best regards,<br>The Sponnect Team</p>
             """
             
-            send_email(influencer.email, subject, body)
+            send_email(subject, influencer.email, body)
     
     return "Activity updates sent to all relevant users"
 
@@ -148,7 +148,7 @@ def send_registration_pending_notification(user_id):
     """
     
     # Send the email
-    send_email(user.email, subject, body)
+    send_email(subject, user.email, body)
     
     # Also notify admins
     notify_admin_pending_approvals()
@@ -202,7 +202,7 @@ def send_account_approval_notification(user_id):
     """
     
     # Send the email
-    send_email(user.email, subject, body)
+    send_email(subject, user.email, body)
     return f"Account approval notification sent to {user.email}"
 
 
@@ -306,7 +306,7 @@ def send_login_stats(user_id):
         return f"Unknown user role: {user.role}"
     
     # Send the email
-    send_email(user.email, subject, body)
+    send_email(subject, user.email, body)
     return f"Login stats sent to {user.email}"
 
 
@@ -350,7 +350,7 @@ def notify_admin_pending_approvals():
     
     # Send to all admins
     for admin in admins:
-        send_email(admin.email, subject, body)
+        send_email(subject, admin.email, body)
     
     return f"Pending approvals notification sent to {len(admins)} admins"
 
@@ -449,7 +449,7 @@ def send_sponsor_stats_update():
         """
         
         # Send the email
-        send_email(sponsor.email, subject, body)
+        send_email(subject, sponsor.email, body)
     
     return f"Sponsor stats update sent to {len(sponsors)} sponsors"
 
@@ -552,7 +552,7 @@ def send_influencer_stats_update():
         """
         
         # Send the email
-        send_email(influencer.email, subject, body)
+        send_email(subject, influencer.email, body)
     
     return f"Influencer stats update sent to {len(influencers)} influencers"
 
@@ -679,6 +679,6 @@ def send_admin_daily_report():
         """
         
         # Send the email
-        send_email(admin.email, subject, body)
+        send_email(subject, admin.email, body)
     
     return f"Admin daily report sent to {len(admins)} admins" 

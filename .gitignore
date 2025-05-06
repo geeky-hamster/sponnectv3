@@ -77,7 +77,7 @@ Thumbs.db
 *~.nib
 
 # Celery
-celerybeat-schedule
+sponnect/backend/celerybeat-schedule
 celerybeat.pid
 celerybeat.log
 celerybeat.log.*

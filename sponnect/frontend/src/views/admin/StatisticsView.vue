@@ -13,14 +13,6 @@ const loading = ref(true)
 const chartLoading = ref(true)
 const error = ref('')
 const timeRange = ref('last_30_days')
-const timeRanges = [
-  { label: 'Today', value: 'today' },
-  { label: 'Last 7 Days', value: 'last_7_days' },
-  { label: 'Last 30 Days', value: 'last_30_days' },
-  { label: 'This Month', value: 'this_month' },
-  { label: 'Last Month', value: 'last_month' },
-  { label: 'This Year', value: 'this_year' }
-]
 
 // Add screen size tracking
 const isSmallScreen = ref(window.innerWidth < 576)
@@ -364,7 +356,7 @@ watch(timeRange, () => {
   <div class="admin-statistics py-3 py-md-5">
     <div class="container-fluid container-md">
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
-        <h1 class="h2 mb-3 mb-md-0">Dashboard Statistics</h1>
+        <h1 class="h2 mb-3 mb-md-0 dashboard-title">Dashboard Statistics</h1>
         <nav aria-label="breadcrumb">
           <ol class="breadcrumb mb-0">
             <li class="breadcrumb-item">
@@ -381,22 +373,6 @@ watch(timeRange, () => {
         <button type="button" class="btn-close" @click="error = ''"></button>
       </div>
       
-      <!-- Time Range Selector -->
-      <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center">
-          <h5 class="card-title mb-2 mb-sm-0">
-            <i class="bi bi-calendar-range me-2"></i>Time Range
-          </h5>
-          <div class="time-range-selector w-100 w-sm-auto" style="max-width: 200px;">
-            <select class="form-select" v-model="timeRange">
-              <option v-for="range in timeRanges" :key="range.value" :value="range.value">
-                {{ range.label }}
-              </option>
-            </select>
-          </div>
-        </div>
-      </div>
-      
       <!-- Loading Spinner -->
       <div v-if="loading" class="text-center py-5">
         <div class="spinner-border text-primary" role="status">
@@ -410,106 +386,88 @@ watch(timeRange, () => {
         <div class="row g-3 g-md-4 mb-4">
           <!-- Users Card -->
           <div class="col-6 col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm h-100 stat-card">
-              <div class="card-body">
+            <div class="card border-0 dashboard-card gradient-blue h-100">
+              <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start">
                   <div>
-                    <h6 class="text-muted mb-1">Total Users</h6>
-                    <h2 class="mb-2 card-value">{{ formatNumber(stats.total_users || 0) }}</h2>
-                    <div :class="userGrowth >= 0 ? 'text-success' : 'text-danger'">
-                      <i :class="userGrowth >= 0 ? 'bi bi-graph-up-arrow' : 'bi bi-graph-down-arrow'"></i>
-                      <span>{{ formatPercentage(userGrowth) }}</span>
+                    <h6 class="card-subtitle mb-2 text-white opacity-75">Total Users</h6>
+                    <h2 class="mb-2 card-value text-white">{{ formatNumber(stats.total_users) }}</h2>
+                    <div class="text-white">
+                      <i class="bi bi-arrow-up-right"></i>
+                      <span>{{ userGrowth >= 0 ? '+' : '' }}{{ formatPercentage(userGrowth) }}</span>
                     </div>
                   </div>
-                  <div class="icon-bg bg-primary bg-opacity-10 rounded-circle p-2 p-md-3">
-                    <i class="bi bi-people text-primary fs-4"></i>
+                  <div class="icon-container">
+                    <i class="bi bi-people-fill text-white fs-4"></i>
                   </div>
                 </div>
-              </div>
-              <div class="card-footer bg-white border-0 py-2">
-                <router-link to="/admin/users" class="text-decoration-none text-muted small">
-                  <i class="bi bi-arrow-right me-1"></i>View all users
-                </router-link>
+                <router-link to="/admin/users" class="stretched-link"></router-link>
               </div>
             </div>
           </div>
           
-          <!-- Campaigns Card -->
+          <!-- Campaign Card -->
           <div class="col-6 col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm h-100 stat-card">
-              <div class="card-body">
+            <div class="card border-0 dashboard-card gradient-green h-100">
+              <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start">
                   <div>
-                    <h6 class="text-muted mb-1">Active Campaigns</h6>
-                    <h2 class="mb-2 card-value">{{ formatNumber(stats.public_campaigns || 0) }}</h2>
-                    <div class="text-muted">
-                      <i class="bi bi-layers"></i>
-                      <span>{{ formatNumber(stats.public_campaigns + stats.private_campaigns || 0) }} total</span>
+                    <h6 class="card-subtitle mb-2 text-white opacity-75">Campaigns</h6>
+                    <h2 class="mb-2 card-value text-white">{{ stats.public_campaigns + stats.private_campaigns }}</h2>
+                    <div class="d-flex align-items-center small">
+                      <span class="badge bg-light text-success me-2">{{ stats.public_campaigns }} Public</span>
+                      <span class="badge bg-light text-secondary">{{ stats.private_campaigns }} Private</span>
                     </div>
                   </div>
-                  <div class="icon-bg bg-success bg-opacity-10 rounded-circle p-2 p-md-3">
-                    <i class="bi bi-megaphone text-success fs-4"></i>
+                  <div class="icon-container">
+                    <i class="bi bi-bullseye text-white fs-4"></i>
                   </div>
                 </div>
-              </div>
-              <div class="card-footer bg-white border-0 py-2">
-                <router-link to="/admin/campaigns" class="text-decoration-none text-muted small">
-                  <i class="bi bi-arrow-right me-1"></i>View all campaigns
-                </router-link>
+                <router-link to="/admin/campaigns" class="stretched-link"></router-link>
               </div>
             </div>
           </div>
           
-          <!-- Engagements Card -->
+          <!-- Engagement Card -->
           <div class="col-6 col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm h-100 stat-card">
-              <div class="card-body">
+            <div class="card border-0 dashboard-card gradient-orange h-100">
+              <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start">
                   <div>
-                    <h6 class="text-muted mb-1">Total Engagements</h6>
-                    <h2 class="mb-2 card-value">{{ 
-                      formatNumber(Object.values(stats.ad_requests_by_status || {}).reduce((sum, val) => sum + val, 0)) 
-                    }}</h2>
-                    <div class="text-muted">
-                      <i class="bi bi-check-circle"></i>
-                      <span>{{ formatNumber(stats.ad_requests_by_status?.Accepted || 0) }} completed</span>
+                    <h6 class="card-subtitle mb-2 text-white opacity-75">Ad Requests</h6>
+                    <h2 class="mb-2 card-value text-white">{{ Object.values(stats.ad_requests_by_status || {}).reduce((sum, val) => sum + val, 0) }}</h2>
+                    <div class="d-flex align-items-center small text-white">
+                      <i class="bi bi-check-circle-fill me-1"></i>
+                      <span>{{ stats.ad_requests_by_status?.Accepted || 0 }} accepted</span>
                     </div>
                   </div>
-                  <div class="icon-bg bg-warning bg-opacity-10 rounded-circle p-2 p-md-3">
-                    <i class="bi bi-briefcase text-warning fs-4"></i>
+                  <div class="icon-container">
+                    <i class="bi bi-clipboard2-data text-white fs-4"></i>
                   </div>
                 </div>
-              </div>
-              <div class="card-footer bg-white border-0 py-2">
-                <router-link to="/admin/engagements" class="text-decoration-none text-muted small">
-                  <i class="bi bi-arrow-right me-1"></i>View all engagements
-                </router-link>
+                <router-link to="/admin/engagements" class="stretched-link"></router-link>
               </div>
             </div>
           </div>
           
-          <!-- Revenue Card -->
+          <!-- Flagged Items Card -->
           <div class="col-6 col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm h-100 stat-card">
-              <div class="card-body">
+            <div class="card border-0 dashboard-card gradient-red h-100">
+              <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start">
                   <div>
-                    <h6 class="text-muted mb-1">Total Revenue</h6>
-                    <h2 class="mb-2 card-value">{{ formatCurrency(stats.payment_stats?.total_payments || 0) }}</h2>
-                    <div :class="revenueGrowth >= 0 ? 'text-success' : 'text-danger'">
-                      <i :class="revenueGrowth >= 0 ? 'bi bi-graph-up-arrow' : 'bi bi-graph-down-arrow'"></i>
-                      <span>{{ formatPercentage(revenueGrowth) }}</span>
+                    <h6 class="card-subtitle mb-2 text-white opacity-75">Flagged Items</h6>
+                    <h2 class="mb-2 card-value text-white">{{ stats.flagged_users + stats.flagged_campaigns }}</h2>
+                    <div class="d-flex flex-wrap gap-2">
+                      <span class="badge bg-light text-danger">{{ stats.flagged_users }} Users</span>
+                      <span class="badge bg-light text-danger">{{ stats.flagged_campaigns }} Campaigns</span>
                     </div>
                   </div>
-                  <div class="icon-bg bg-info bg-opacity-10 rounded-circle p-2 p-md-3">
-                    <i class="bi bi-cash-stack text-info fs-4"></i>
+                  <div class="icon-container">
+                    <i class="bi bi-shield-exclamation text-white fs-4"></i>
                   </div>
                 </div>
-              </div>
-              <div class="card-footer bg-white border-0 py-2">
-                <router-link to="/admin/finances" class="text-decoration-none text-muted small">
-                  <i class="bi bi-arrow-right me-1"></i>View financial details
-                </router-link>
+                <router-link to="/admin/users?flagged=true" class="stretched-link"></router-link>
               </div>
             </div>
           </div>
@@ -519,7 +477,7 @@ watch(timeRange, () => {
         <div class="row g-4 mb-4">
           <!-- User Growth Chart -->
           <div class="col-12 col-lg-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 chart-card h-100">
               <div class="card-header bg-white border-0 pt-3 pt-md-4 pb-3">
                 <h5 class="mb-0">User Growth</h5>
                 <p class="text-muted small mb-0">New user registrations over time</p>
@@ -542,7 +500,7 @@ watch(timeRange, () => {
           
           <!-- Campaign Distribution Chart -->
           <div class="col-12 col-lg-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 chart-card h-100">
               <div class="card-header bg-white border-0 pt-3 pt-md-4 pb-3">
                 <h5 class="mb-0">Campaign Budget Distribution</h5>
                 <p class="text-muted small mb-0">Campaigns by budget range</p>
@@ -568,7 +526,7 @@ watch(timeRange, () => {
         <div class="row g-4 mt-3 mt-md-4">
           <!-- Ad Request Status Chart -->
           <div class="col-12 col-lg-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 chart-card h-100">
               <div class="card-header bg-white border-0 pt-3 pt-md-4 pb-3">
                 <h5 class="mb-0">Ad Request Status</h5>
                 <p class="text-muted small mb-0">Distribution of ad requests by status</p>
@@ -591,7 +549,7 @@ watch(timeRange, () => {
           
           <!-- Campaign Activity Chart -->
           <div class="col-12 col-lg-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 chart-card h-100">
               <div class="card-header bg-white border-0 pt-3 pt-md-4 pb-3">
                 <h5 class="mb-0">Campaign Activity</h5>
                 <p class="text-muted small mb-0">New campaigns and ad requests over time</p>
@@ -618,19 +576,71 @@ watch(timeRange, () => {
 </template>
 
 <style scoped>
-.icon-bg {
+.dashboard-title {
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  position: relative;
+  padding-bottom: 0.5rem;
+}
+
+.dashboard-title::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 80px;
+  height: 3px;
+  background: linear-gradient(to right, #4361ee, #3a0ca3);
+}
+
+.dashboard-card {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
+  position: relative;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 20px rgba(0,0,0,0.15);
+}
+
+.gradient-blue {
+  background: linear-gradient(135deg, #4361ee, #3a0ca3);
+}
+
+.gradient-green {
+  background: linear-gradient(135deg, #4cc9f0, #4895ef);
+}
+
+.gradient-orange {
+  background: linear-gradient(135deg, #f48c06, #e85d04);
+}
+
+.gradient-red {
+  background: linear-gradient(135deg, #ef476f, #d90429);
+}
+
+.icon-container {
   width: 50px;
   height: 50px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-@media (min-width: 768px) {
-  .icon-bg {
-    width: 60px;
-    height: 60px;
-  }
+.chart-card {
+  border-radius: 15px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: box-shadow 0.3s;
+  overflow: hidden;
+}
+
+.chart-card:hover {
+  box-shadow: 0 8px 16px rgba(0,0,0,0.12);
 }
 
 .chart-container {
@@ -638,18 +648,10 @@ watch(timeRange, () => {
   width: 100%;
 }
 
-.stat-card {
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.stat-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
-}
-
 /* Responsive adjustments for card values */
 .card-value {
   font-size: 1.5rem;
+  font-weight: 700;
 }
 
 @media (min-width: 576px) {
@@ -673,4 +675,4 @@ watch(timeRange, () => {
 .admin-statistics {
   animation: fadeIn 0.5s ease-in-out;
 }
-</style> 
+</style>

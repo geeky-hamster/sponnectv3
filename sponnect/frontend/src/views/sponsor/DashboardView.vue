@@ -34,7 +34,7 @@ onMounted(async () => {
 <template>
   <div class="sponsor-dashboard py-5">
     <div class="container">
-      <h1 class="mb-4">Sponsor Dashboard</h1>
+      <h1 class="mb-4 dashboard-title">Sponsor Dashboard</h1>
       
       <div v-if="loading" class="text-center py-5">
         <div class="spinner-border text-primary" role="status">
@@ -51,42 +51,42 @@ onMounted(async () => {
         <!-- Dashboard Summary -->
         <div class="row mb-4">
           <div class="col-md-4 mb-3">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 dashboard-card gradient-1 h-100">
               <div class="card-body p-4">
-                <h5 class="card-title">Total Campaigns</h5>
+                <h5 class="card-title text-white">Total Campaigns</h5>
                 <div class="d-flex align-items-center mt-3">
-                  <div class="bg-primary rounded-circle p-3 me-3">
-                    <i class="bi bi-megaphone text-white fs-4"></i>
+                  <div class="icon-container me-3">
+                    <i class="bi bi-bullseye text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ campaigns.length }}</h3>
+                  <h3 class="mb-0 text-white">{{ campaigns.length }}</h3>
                 </div>
               </div>
             </div>
           </div>
           
           <div class="col-md-4 mb-3">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 dashboard-card gradient-2 h-100">
               <div class="card-body p-4">
-                <h5 class="card-title">Active Requests</h5>
+                <h5 class="card-title text-white">Active Requests</h5>
                 <div class="d-flex align-items-center mt-3">
-                  <div class="bg-success rounded-circle p-3 me-3">
-                    <i class="bi bi-chat-dots text-white fs-4"></i>
+                  <div class="icon-container me-3">
+                    <i class="bi bi-clipboard2-pulse text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Pending' || r.status === 'Negotiating').length : 0 }}</h3>
+                  <h3 class="mb-0 text-white">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Pending' || r.status === 'Negotiating').length : 0 }}</h3>
                 </div>
               </div>
             </div>
           </div>
           
           <div class="col-md-4 mb-3">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 dashboard-card gradient-3 h-100">
               <div class="card-body p-4">
-                <h5 class="card-title">Accepted Partnerships</h5>
+                <h5 class="card-title text-white">Accepted Partnerships</h5>
                 <div class="d-flex align-items-center mt-3">
-                  <div class="bg-info rounded-circle p-3 me-3">
-                    <i class="bi bi-handshake text-white fs-4"></i>
+                  <div class="icon-container me-3">
+                    <i class="bi bi-people-fill text-white fs-4"></i>
                   </div>
-                  <h3 class="mb-0">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Accepted').length : 0 }}</h3>
+                  <h3 class="mb-0 text-white">{{ adRequests.filter ? adRequests.filter(r => r.status === 'Accepted').length : 0 }}</h3>
                 </div>
               </div>
             </div>
@@ -94,7 +94,7 @@ onMounted(async () => {
         </div>
         
         <!-- Recent Campaigns -->
-        <div class="card border-0 shadow-sm mb-4">
+        <div class="card border-0 content-card mb-4">
           <div class="card-header bg-white border-0 py-3">
             <div class="d-flex justify-content-between align-items-center">
               <h4 class="mb-0">Recent Campaigns</h4>
@@ -147,7 +147,7 @@ onMounted(async () => {
         </div>
         
         <!-- Recent Requests -->
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 content-card">
           <div class="card-header bg-white border-0 py-3">
             <div class="d-flex justify-content-between align-items-center">
               <h4 class="mb-0">Recent Requests</h4>
@@ -205,3 +205,57 @@ onMounted(async () => {
     </div>
   </div>
 </template> 
+
+<style>
+.dashboard-title {
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #4361ee;
+  padding-bottom: 0.5rem;
+  display: inline-block;
+}
+
+.dashboard-card {
+  border-radius: 12px;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
+  overflow: hidden;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 20px rgba(0,0,0,0.15);
+}
+
+.gradient-1 {
+  background: linear-gradient(135deg, #4361ee, #3f37c9);
+}
+
+.gradient-2 {
+  background: linear-gradient(135deg, #0096c7, #0077b6);
+}
+
+.gradient-3 {
+  background: linear-gradient(135deg, #4cc9f0, #4895ef);
+}
+
+.icon-container {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.content-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: box-shadow 0.3s;
+}
+
+.content-card:hover {
+  box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+}
+</style> 

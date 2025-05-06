@@ -1,6 +1,7 @@
 <script setup>
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import bg from '../assets/bg.svg'
 
 const authStore = useAuthStore()
 </script>
@@ -8,7 +9,7 @@ const authStore = useAuthStore()
 <template>
   <div class="landing-page">
     <!-- Hero Section -->
-    <section class="hero bg-primary text-white py-5">
+    <section class="hero text-white py-5">
       <div class="container">
         <div class="row align-items-center">
           <div class="col-lg-6">
@@ -25,7 +26,7 @@ const authStore = useAuthStore()
             </div>
           </div>
           <div class="col-lg-6 mt-5 mt-lg-0 text-center">
-            <img src="../assets/hero-image.svg" alt="Sponnect Platform" class="img-fluid" style="max-height: 400px;">
+            <img src="../assets/logo.png" alt="Sponnect Platform" class="img-fluid" style="max-height: 400px;">
           </div>
         </div>
       </div>
@@ -157,15 +158,22 @@ const authStore = useAuthStore()
 }
 
 .hero {
-  background-image: url(https://i.pinimg.com/originals/89/43/2c/89432cf18889ab00675e0963a2928362.gif);
-  background-size: cover;
   position: relative;
   overflow: hidden;
+  background-image: url(https://media.istockphoto.com/id/1456442889/vector/smooth-flow-of-wavy-shape-with-gradient-vector-abstract-background-dark-blue-design-curve.jpg?s=612x612&w=0&k=20&c=0gCHz_yQX8JSwDp661DSAzYZnNSeJ8Tpb5iUH7EF4w4=);
+  background-size: cover;
+  background-position: center;
 }
 
+
 .cta {
-  background-image: url(https://i.pinimg.com/originals/89/43/2c/89432cf18889ab00675e0963a2928362.gif);
+  position: relative;
+  overflow: hidden;
+  background-image: url(https://media.istockphoto.com/id/1456442889/vector/smooth-flow-of-wavy-shape-with-gradient-vector-abstract-background-dark-blue-design-curve.jpg?s=612x612&w=0&k=20&c=0gCHz_yQX8JSwDp661DSAzYZnNSeJ8Tpb5iUH7EF4w4=);
   background-size: cover;
+  background-position: center;
 }
+
+
 
 </style> 

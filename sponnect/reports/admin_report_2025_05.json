@@ -1,44 +1,49 @@
 {
-  "total_users": 31,
-  "new_users": 1,
-  "user_growth": 0.0,
-  "active_sponsors": 10,
-  "sponsor_growth": 0.0,
-  "active_influencers": 20,
-  "influencer_growth": 0.0,
-  "total_campaigns": 30,
-  "new_campaigns": 0,
-  "campaign_growth": 0.0,
+  "total_users": 32,
+  "new_users": 2,
+  "user_growth": -33.3,
+  "active_sponsors": 11,
+  "sponsor_growth": 10.0,
+  "active_influencers": 18,
+  "influencer_growth": -10.0,
+  "total_campaigns": 31,
+  "new_campaigns": 5,
+  "campaign_growth": 19.2,
   "campaign_categories": [
     {
       "name": "automotive",
       "count": 6,
-      "percentage": 20.0
+      "percentage": 19.4
+    },
+    {
+      "name": "entertainment",
+      "count": 9,
+      "percentage": 29.0
     },
     {
       "name": "fashion",
       "count": 6,
-      "percentage": 20.0
+      "percentage": 19.4
     },
     {
-      "name": "finance",
-      "count": 7,
-      "percentage": 23.3
+      "name": "fitness",
+      "count": 2,
+      "percentage": 6.5
     },
     {
-      "name": "lifestyle",
+      "name": "technology",
       "count": 3,
-      "percentage": 10.0
+      "percentage": 9.7
     },
     {
       "name": "travel",
-      "count": 8,
-      "percentage": 26.7
+      "count": 5,
+      "percentage": 16.1
     }
   ],
-  "total_ad_requests": 50,
-  "new_ad_requests": 0,
-  "ad_request_growth": 0.0,
+  "total_ad_requests": 52,
+  "new_ad_requests": 8,
+  "ad_request_growth": 18.2,
   "ad_request_statuses": [
     {
       "name": "Pending",
@@ -66,19 +71,19 @@
       "percentage": 0.0
     }
   ],
-  "total_payments": 75405.3372049299,
-  "platform_fees": 754.0533720492991,
-  "payment_growth": -0.1,
+  "total_payments": 61763.75464065512,
+  "platform_fees": 617.6375464065512,
+  "payment_growth": 68.0,
   "platform_fee_percentage": 1.0,
   "payment_types": [
     {
       "name": "Standard Campaigns",
-      "amount": 52783.73604345093,
+      "amount": 43234.62824845858,
       "percentage": 70
     },
     {
       "name": "Premium Campaigns",
-      "amount": 22621.60116147897,
+      "amount": 18529.126392196536,
       "percentage": 30
     }
   ]

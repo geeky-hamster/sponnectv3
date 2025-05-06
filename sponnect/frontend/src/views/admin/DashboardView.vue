@@ -337,7 +337,7 @@ const rejectUser = async (user) => {
       <div v-else>
         <!-- Stats Overview -->
         <div class="row mb-4">
-          <div class="col-md-3 col-sm-6 mb-3">
+          <div class="col-md-4 col-sm-6 mb-3">
             <div class="card border-0 shadow-sm h-100 card-hover">
               <div class="card-body p-4">
                 <div class="d-flex justify-content-between">
@@ -352,7 +352,7 @@ const rejectUser = async (user) => {
             </div>
           </div>
           
-          <div class="col-md-3 col-sm-6 mb-3">
+          <div class="col-md-4 col-sm-6 mb-3">
             <div class="card border-0 shadow-sm h-100 card-hover">
               <div class="card-body p-4">
                 <div class="d-flex justify-content-between">
@@ -367,7 +367,7 @@ const rejectUser = async (user) => {
             </div>
           </div>
           
-          <div class="col-md-3 col-sm-6 mb-3">
+          <div class="col-md-4 col-sm-6 mb-3">
             <div class="card border-0 shadow-sm h-100 card-hover">
               <div class="card-body p-4">
                 <div class="d-flex justify-content-between">
@@ -381,8 +381,10 @@ const rejectUser = async (user) => {
               </div>
             </div>
           </div>
-          
-          <div class="col-md-3 col-sm-6 mb-3">
+        </div>
+
+        <div class="row mb-4">  
+          <div class="col-md-4 col-sm-6 mb-3">
             <div class="card border-0 shadow-sm h-100 card-hover">
               <div class="card-body p-4">
                 <div class="d-flex justify-content-between">
@@ -396,9 +398,9 @@ const rejectUser = async (user) => {
               </div>
             </div>
           </div>
-        </div>
-        <div class="row g-4 mb-4">
-          <div class="col-md-3 col-sm-6">
+        
+        
+          <div class="col-md-4 col-sm-6 mb-3">
             <div class="card border-0 shadow-sm h-100">
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -407,7 +409,7 @@ const rejectUser = async (user) => {
                     <i class="bi bi-briefcase text-primary"></i>
                   </div>
                 </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.pending_sponsors || 0 }}</h2>
+                <h2 class="display-6 fw-bold mb-0">{{ stats.pendingSponsors || 0 }}</h2>
                 <router-link to="/admin/users?role=sponsor&status=pending" class="mt-3 d-inline-block text-decoration-none">
                   Manage
                   <i class="bi bi-arrow-right ms-1"></i>
@@ -416,7 +418,7 @@ const rejectUser = async (user) => {
             </div>
           </div>
           
-          <div class="col-md-3 col-sm-6">
+          <div class="col-md-4 col-sm-6 mb-3">
             <div class="card border-0 shadow-sm h-100">
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -433,36 +435,7 @@ const rejectUser = async (user) => {
               </div>
             </div>
           </div>
-          
-          <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="card-subtitle text-muted">Active Sponsors</h6>
-                  <div class="icon-circle bg-success bg-opacity-10">
-                    <i class="bi bi-building-check text-success"></i>
-                  </div>
-                </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.active_sponsors || 0 }}</h2>
-              </div>
-            </div>
-          </div>
-          
-          <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h6 class="card-subtitle text-muted">Active Influencers</h6>
-                  <div class="icon-circle bg-success bg-opacity-10">
-                    <i class="bi bi-person-check text-success"></i>
-                  </div>
-                </div>
-                <h2 class="display-6 fw-bold mb-0">{{ stats.active_influencers || 0 }}</h2>
-              </div>
-            </div>
-          </div>
         </div>
-        
         <!-- Campaigns & Ad Requests -->
         <div class="row mb-4">
           <div class="col-md-6 mb-3">

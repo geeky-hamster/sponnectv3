@@ -23,6 +23,7 @@ const authStore = useAuthStore()
 </template>
 
 <style scoped>
+
 .logo {
   height: 6em;
   padding: 1.5em;

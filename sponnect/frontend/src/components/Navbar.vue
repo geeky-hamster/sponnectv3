@@ -124,9 +124,6 @@ const logout = () => {
           <li class="nav-item">
             <RouterLink class="nav-link" to="/admin/statistics">Statistics</RouterLink>
           </li>
-          <li class="nav-item">
-            <RouterLink class="nav-link" to="/admin/reports">Reports</RouterLink>
-          </li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
               <i class="bi bi-person-circle me-1"></i>Admin
@@ -145,9 +142,10 @@ const logout = () => {
 
 <style scoped>
 .navbar {
-  background-image: url(https://i.pinimg.com/originals/89/43/2c/89432cf18889ab00675e0963a2928362.gif);
+  background-image: url(https://media.istockphoto.com/id/1456442889/vector/smooth-flow-of-wavy-shape-with-gradient-vector-abstract-background-dark-blue-design-curve.jpg?s=612x612&w=0&k=20&c=0gCHz_yQX8JSwDp661DSAzYZnNSeJ8Tpb5iUH7EF4w4=);
   background-size: cover;
 }
+
 .nav-link{
   color: white;
 }

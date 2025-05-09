@@ -2,6 +2,7 @@
 import { RouterView } from 'vue-router'
 import Navbar from './components/Navbar.vue'
 import { useAuthStore } from './stores/auth'
+import Footer from './components/Footer.vue'
 
 const authStore = useAuthStore()
 </script>
@@ -15,11 +16,7 @@ const authStore = useAuthStore()
     <RouterView />
   </main>
 
-  <footer class="py-4 bg-dark text-white mt-5">
-    <div class="container text-center">
-      <p class="mb-0">© 2023 Sponnect - Connecting Sponsors & Influencers</p>
-    </div>
-  </footer>
+  <Footer />
 </template>
 
 <style scoped>

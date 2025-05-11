@@ -1,0 +1,77 @@
+{% extends "emails/base/email_template.html" %}
+
+{% block title %}Sponnect Sponsor Status Update{% endblock %}
+
+{% block header %}Sponsor Dashboard Summary{% endblock %}
+
+{% block content %}
+<h2>Hello {{ sponsor.username }},</h2>
+<p>Here's a summary of your Sponnect sponsor account activity:</p>
+
+<div class="info-box">
+    <h3>Campaign Statistics</h3>
+    <table>
+        <tr>
+            <th>Active Campaigns</th>
+            <td>{{ active_campaigns }}</td>
+        </tr>
+        <tr>
+            <th>Total Campaigns</th>
+            <td>{{ total_campaigns }}</td>
+        </tr>
+    </table>
+</div>
+
+<div class="info-box">
+    <h3>Ad Request Statistics</h3>
+    <table>
+        <tr>
+            <th>Pending Requests</th>
+            <td>{{ pending_requests }}</td>
+        </tr>
+        <tr>
+            <th>Active Negotiations</th>
+            <td>{{ active_negotiations }}</td>
+        </tr>
+        <tr>
+            <th>Accepted Partnerships</th>
+            <td>{{ accepted_partnerships }}</td>
+        </tr>
+        <tr>
+            <th>Pending Progress Updates</th>
+            <td>{{ pending_progress_updates }}</td>
+        </tr>
+    </table>
+</div>
+
+{% if pending_requests > 0 %}
+<div class="warning-box">
+    <p><strong>Action Required:</strong> You have {{ pending_requests }} pending ad request(s) waiting for your review.</p>
+</div>
+{% endif %}
+
+{% if recent_requests %}
+<div class="info-box">
+    <h3>Recently Submitted Ad Requests</h3>
+    <table>
+        <tr>
+            <th>Influencer</th>
+            <th>Campaign</th>
+            <th>Date</th>
+        </tr>
+        {% for request in recent_requests %}
+        <tr>
+            <td>{{ request.influencer_username }}</td>
+            <td>{{ request.campaign_name }}</td>
+            <td>{{ request.created_at }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+<a href="{{ frontend_url }}/sponsor/dashboard" class="button">Go to Your Dashboard</a>
+
+<p>Thank you for using Sponnect!</p>
+<p>Best regards,<br>The Sponnect Team</p>
+{% endblock %} 

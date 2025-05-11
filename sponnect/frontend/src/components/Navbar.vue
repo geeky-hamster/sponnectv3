@@ -30,15 +30,12 @@ const logout = () => {
 
 <template>
   <div class="navbar-container">
-    <!-- Background video container -->
-    <div class="video-background">
-      <video 
-        autoplay 
-        loop 
-        muted 
-        playsinline
-        src="https://video.wixstatic.com/video/11062b_0a3a288182c34d1294f46fe6a2b17df6/1080p/mp4/file.mp4">
-      </video>
+    <!-- Background image container -->
+    <div class="image-background">
+      <img 
+        src="https://res.cloudinary.com/da9hk6mws/image/upload/v1746987905/videoframe_3455_ry6k3c.png"
+        alt="Navbar Background"
+      />
       <div class="overlay"></div>
     </div>
     
@@ -160,7 +157,7 @@ const logout = () => {
   position: relative;
 }
 
-.video-background {
+.image-background {
   position: absolute;
   top: 0;
   left: 0;
@@ -169,7 +166,7 @@ const logout = () => {
   z-index: -1;
 }
 
-.video-background video {
+.image-background img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -181,7 +178,7 @@ const logout = () => {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.733); /* Primary blue with opacity */
+  background-color: rgba(0, 0, 0, 0.733); /* Dark overlay */
 }
 
 .navbar {

@@ -10,14 +10,13 @@ const authStore = useAuthStore()
   <div class="landing-page">
     <!-- Hero Section -->
     <section class="hero text-white py-5">
-      <!-- <video 
-        class="hero-video" 
-        autoplay 
-        loop 
-        muted 
-        playsinline
-        src="https://video.wixstatic.com/video/11062b_0a3a288182c34d1294f46fe6a2b17df6/1080p/mp4/file.mp4">
-      </video> --> 
+      <div class="hero-image-container">
+        <img 
+          src="https://res.cloudinary.com/da9hk6mws/image/upload/v1746987905/videoframe_3455_ry6k3c.png" 
+          alt="Sponnect Hero Background" 
+          class="hero-background-image"
+        />
+      </div>
       <div class="container">
         <div class="row align-items-center">
           <div class="col-lg-6">
@@ -177,10 +176,28 @@ const authStore = useAuthStore()
   position: relative;
   overflow: hidden;
   padding: 80px 0;
-  background-image: url('sponnect/frontend/public/bg_image.png');
+  background-color: rgba(0, 0, 0, 0.6);
 }
 
+.hero-image-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+}
 
+.hero-background-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero .container {
+  position: relative;
+  z-index: 2;
+}
 
 .cta {
   position: relative;

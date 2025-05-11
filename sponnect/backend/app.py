@@ -403,15 +403,23 @@ def login():
         return jsonify({"message": "Missing JSON in request"}), 400
         
     username = data.get('username')
+    email = data.get('email')
     password = data.get('password')
     
-    if not username or not password:
-        return jsonify({"message": "Username and password are required"}), 400
+    if not password:
+        return jsonify({"message": "Password is required"}), 400
         
-    user = User.query.filter_by(username=username).first()
+    if not username and not email:
+        return jsonify({"message": "Username or email is required"}), 400
+        
+    # Check if login is with username or email
+    if username:
+        user = User.query.filter_by(username=username).first()
+    else:
+        user = User.query.filter_by(email=email).first()
     
     if not user or not user.check_password(password):
-        return jsonify({"message": "Invalid username or password"}), 401
+        return jsonify({"message": "Invalid login credentials"}), 401
         
     # Check if user is active
     if not getattr(user, 'is_active', True):

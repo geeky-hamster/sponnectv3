@@ -1,0 +1,107 @@
+{% extends "emails/base/email_template.html" %}
+
+{% block title %}Welcome back to Sponnect, {{ user.username }}!{% endblock %}
+
+{% block header %}Welcome Back to Sponnect{% endblock %}
+
+{% block content %}
+<h2>Hello {{ user.username }},</h2>
+
+{% if user.role == 'admin' %}
+<p>Here's a quick summary of your Sponnect platform:</p>
+
+<div class="info-box">
+    <h3>Platform Summary</h3>
+    <table>
+        <tr>
+            <th>Pending Approvals</th>
+            <td>{{ pending_users }}</td>
+        </tr>
+        <tr>
+            <th>Total Users</th>
+            <td>{{ total_users }}</td>
+        </tr>
+        <tr>
+            <th>Active Campaigns</th>
+            <td>{{ total_campaigns }}</td>
+        </tr>
+        <tr>
+            <th>Ad Requests</th>
+            <td>{{ total_ad_requests }}</td>
+        </tr>
+    </table>
+</div>
+
+{% if pending_users > 0 %}
+<div class="warning-box">
+    <p><strong>Action Required:</strong> There are {{ pending_users }} user account(s) waiting for approval.</p>
+</div>
+{% endif %}
+
+<a href="{{ frontend_url }}/admin/dashboard" class="button">Go to Admin Dashboard</a>
+
+{% elif user.role == 'sponsor' %}
+<p>Welcome back to your Sponnect sponsor dashboard!</p>
+
+<div class="info-box">
+    <h3>Your Campaign Summary</h3>
+    <table>
+        <tr>
+            <th>Your Active Campaigns</th>
+            <td>{{ total_campaigns }}</td>
+        </tr>
+        <tr>
+            <th>Pending Ad Requests</th>
+            <td>{{ pending_requests }}</td>
+        </tr>
+        <tr>
+            <th>Approved Partnerships</th>
+            <td>{{ approved_requests }}</td>
+        </tr>
+    </table>
+</div>
+
+{% if pending_requests > 0 %}
+<div class="warning-box">
+    <p><strong>Action Required:</strong> You have {{ pending_requests }} ad request(s) waiting for your review.</p>
+</div>
+{% endif %}
+
+<a href="{{ frontend_url }}/sponsor/dashboard" class="button">Go to Sponsor Dashboard</a>
+
+{% elif user.role == 'influencer' %}
+<p>Welcome back to your Sponnect influencer dashboard!</p>
+
+<div class="info-box">
+    <h3>Your Application Summary</h3>
+    <table>
+        <tr>
+            <th>Pending Applications</th>
+            <td>{{ pending_requests }}</td>
+        </tr>
+        <tr>
+            <th>Approved Partnerships</th>
+            <td>{{ approved_requests }}</td>
+        </tr>
+    </table>
+</div>
+
+{% if matching_campaigns %}
+<div class="success-box">
+    <h3>New Campaigns That Match Your Profile</h3>
+    <ul>
+        {% for campaign in matching_campaigns %}
+        <li>
+            <strong>{{ campaign.name }}</strong> - {{ campaign.description|truncate(100) }}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<a href="{{ frontend_url }}/influencer/dashboard" class="button">Go to Influencer Dashboard</a>
+{% endif %}
+
+<p>Thank you for using Sponnect!</p>
+<p>Best regards,<br>The Sponnect Team</p>
+{% endblock %} 

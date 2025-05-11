@@ -1,0 +1,44 @@
+{% extends "emails/base/email_template.html" %}
+
+{% block title %}Your Sponnect Account Has Been Approved{% endblock %}
+
+{% block header %}Account Approved{% endblock %}
+
+{% block content %}
+<h2>Hello {{ user.username }},</h2>
+
+<div class="success-box">
+    <h3>Account Approved!</h3>
+    <p>Great news! Your account has been approved and you can now access all Sponnect features.</p>
+    <p>Role: <strong>{{ user.role|title }}</strong></p>
+</div>
+
+<div class="info-box">
+    <h3>Next Steps</h3>
+    <p>Here are a few things you might want to do next:</p>
+    
+    {% if user.role == 'sponsor' %}
+    <ul>
+        <li>Create your first campaign</li>
+        <li>Browse influencer profiles</li>
+        <li>Set up your payment method</li>
+    </ul>
+    {% elif user.role == 'influencer' %}
+    <ul>
+        <li>Complete your profile to attract sponsors</li>
+        <li>Browse available campaigns</li>
+        <li>Set up your payment details</li>
+    </ul>
+    {% else %}
+    <ul>
+        <li>Complete your profile</li>
+        <li>Explore the platform features</li>
+    </ul>
+    {% endif %}
+</div>
+
+<a href="{{ frontend_url }}/{{ user.role }}/dashboard" class="button">Go to Your Dashboard</a>
+
+<p>Thank you for choosing Sponnect!</p>
+<p>Best regards,<br>The Sponnect Team</p>
+{% endblock %} 

@@ -1,0 +1,51 @@
+{% extends "emails/base/email_template.html" %}
+
+{% block title %}Sponnect Platform Activity Update{% endblock %}
+
+{% block header %}Platform Activity Update{% endblock %}
+
+{% block content %}
+<h2>Hello {{ user.username }},</h2>
+<p>Here's a summary of the current platform status:</p>
+
+<div class="info-box">
+    <h3>Platform Totals</h3>
+    <table>
+        <tr>
+            <th>Total Users</th>
+            <td>{{ total_users }}</td>
+        </tr>
+        <tr>
+            <th>Total Campaigns</th>
+            <td>{{ total_campaigns }}</td>
+        </tr>
+        <tr>
+            <th>Total Ad Requests</th>
+            <td>{{ total_ad_requests }}</td>
+        </tr>
+    </table>
+</div>
+
+<div class="info-box">
+    <h3>Recent Activity (Last 24 Hours)</h3>
+    <table>
+        <tr>
+            <th>New Users</th>
+            <td>{{ new_users }}</td>
+        </tr>
+        <tr>
+            <th>New Campaigns</th>
+            <td>{{ new_campaigns }}</td>
+        </tr>
+        <tr>
+            <th>New Ad Requests</th>
+            <td>{{ new_ad_requests }}</td>
+        </tr>
+    </table>
+</div>
+
+<a href="{{ frontend_url }}/{{ role }}/dashboard" class="button">View Dashboard</a>
+
+<p>Thank you for using Sponnect!</p>
+<p>Best regards,<br>The Sponnect Team</p>
+{% endblock %} 

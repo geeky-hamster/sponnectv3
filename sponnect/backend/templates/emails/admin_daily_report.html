@@ -1,0 +1,108 @@
+{% extends "emails/base/email_template.html" %}
+
+{% block title %}Sponnect Admin Daily Report{% endblock %}
+
+{% block header %}Admin Daily Platform Report{% endblock %}
+
+{% block content %}
+<h2>Hello {{ admin.username }},</h2>
+<p>Here's your daily summary of Sponnect platform activity:</p>
+
+{% if pending_approvals > 0 %}
+<div class="warning-box">
+    <h3>Pending Approvals</h3>
+    <p><strong>Action Required:</strong> There are {{ pending_approvals }} user accounts waiting for approval.</p>
+    <table>
+        <tr>
+            <th>Pending Sponsors</th>
+            <td>{{ pending_sponsors }}</td>
+        </tr>
+        <tr>
+            <th>Pending Influencers</th>
+            <td>{{ pending_influencers }}</td>
+        </tr>
+    </table>
+    <a href="{{ frontend_url }}/admin/approvals" class="button">Review Pending Approvals</a>
+</div>
+{% endif %}
+
+<div class="info-box">
+    <h3>Platform Overview</h3>
+    <table>
+        <tr>
+            <th>Total Users</th>
+            <td>{{ total_users }}</td>
+        </tr>
+        <tr>
+            <th>Active Campaigns</th>
+            <td>{{ active_campaigns }}</td>
+        </tr>
+        <tr>
+            <th>Total Ad Requests</th>
+            <td>{{ total_ad_requests }}</td>
+        </tr>
+        <tr>
+            <th>Completed Partnerships</th>
+            <td>{{ completed_partnerships }}</td>
+        </tr>
+    </table>
+</div>
+
+<div class="info-box">
+    <h3>Daily Activity (Last 24h)</h3>
+    <table>
+        <tr>
+            <th>New User Registrations</th>
+            <td>{{ new_users }}</td>
+        </tr>
+        <tr>
+            <th>New Campaigns</th>
+            <td>{{ new_campaigns }}</td>
+        </tr>
+        <tr>
+            <th>New Ad Requests</th>
+            <td>{{ new_ad_requests }}</td>
+        </tr>
+        <tr>
+            <th>New Payments</th>
+            <td>{{ new_payments }}</td>
+        </tr>
+    </table>
+</div>
+
+{% if reports or disputes %}
+<div class="warning-box">
+    <h3>Issues Requiring Attention</h3>
+    {% if reports %}
+    <p><strong>Content Reports:</strong> {{ reports|length }} new content report(s)</p>
+    {% endif %}
+    
+    {% if disputes %}
+    <p><strong>Payment Disputes:</strong> {{ disputes|length }} active payment dispute(s)</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="info-box">
+    <h3>System Status</h3>
+    <table>
+        <tr>
+            <th>Database Size</th>
+            <td>{{ db_size }}</td>
+        </tr>
+        <tr>
+            <th>Storage Usage</th>
+            <td>{{ storage_usage }}</td>
+        </tr>
+        <tr>
+            <th>API Health</th>
+            <td>{{ api_health }}</td>
+        </tr>
+    </table>
+</div>
+
+<a href="{{ frontend_url }}/admin/dashboard" class="button">Go to Admin Dashboard</a>
+
+<p>Thank you for administering Sponnect!</p>
+<p>Best regards,<br>The Sponnect System</p>
+{% endblock %} 

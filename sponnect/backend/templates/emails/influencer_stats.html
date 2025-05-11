@@ -1,0 +1,71 @@
+{% extends "emails/base/email_template.html" %}
+
+{% block title %}Sponnect Influencer Status Update{% endblock %}
+
+{% block header %}Influencer Dashboard Summary{% endblock %}
+
+{% block content %}
+<h2>Hello {{ influencer.username }},</h2>
+<p>Here's your current activity on the Sponnect platform:</p>
+
+<div class="info-box">
+    <h3>Your Partnerships</h3>
+    <table>
+        <tr>
+            <th>Pending Applications</th>
+            <td>{{ pending_applications }}</td>
+        </tr>
+        <tr>
+            <th>Active Negotiations</th>
+            <td>{{ active_negotiations }}</td>
+        </tr>
+        <tr>
+            <th>Active Partnerships</th>
+            <td>{{ active_partnerships }}</td>
+        </tr>
+    </table>
+    
+    {% if pending_applications > 0 %}
+    <div class="warning-box">
+        <p><strong>Action Required:</strong> You have pending applications that may require your attention.</p>
+    </div>
+    {% endif %}
+    
+    {% if active_negotiations > 0 %}
+    <div class="warning-box">
+        <p><strong>Action Required:</strong> You have active negotiations in progress.</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="info-box">
+    <h3>Content Submissions</h3>
+    <table>
+        <tr>
+            <th>Pending Content Reviews</th>
+            <td>{{ pending_content_reviews }}</td>
+        </tr>
+    </table>
+</div>
+
+{% if matching_campaigns > 0 %}
+<div class="success-box">
+    <h3>Opportunities</h3>
+    <p>There are currently <strong>{{ matching_campaigns }}</strong> campaigns that match your profile!</p>
+    
+    {% if recent_matching_campaigns %}
+    <h4>Recent Matching Campaigns:</h4>
+    <ul>
+        {% for campaign in recent_matching_campaigns %}
+        <li><strong>{{ campaign.name }}</strong>: {{ campaign.description[:100] }}{% if campaign.description|length > 100 %}...{% endif %}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% endif %}
+
+<a href="{{ frontend_url }}/influencer/dashboard" class="button">Go to Your Dashboard</a>
+
+<p>Thank you for using Sponnect!</p>
+<p>Best regards,<br>The Sponnect Team</p>
+{% endblock %} 

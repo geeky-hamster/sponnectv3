@@ -9,9 +9,9 @@ import jsPDF from 'jspdf'
  * @param {string} data.campaign_name - Campaign name
  * @param {string} data.sponsor_name - Sponsor name
  * @param {string} data.influencer_name - Influencer name
- * @param {string} data.amount_formatted - Formatted payment amount
- * @param {string} data.platform_fee_formatted - Formatted platform fee
- * @param {string} data.influencer_amount_formatted - Formatted influencer amount
+ * @param {string} data.amount_formatted_pdf - PDF-friendly formatted payment amount
+ * @param {string} data.platform_fee_formatted_pdf - PDF-friendly formatted platform fee
+ * @param {string} data.influencer_amount_formatted_pdf - PDF-friendly formatted influencer amount
  * @param {string} data.status - Payment status
  * @returns {jsPDF} PDF document
  */
@@ -84,17 +84,17 @@ export const generatePaymentReceipt = (data) => {
   doc.setFont(undefined, 'bold');
   doc.text('Payment Amount:', 20, 105);
   doc.setFont(undefined, 'normal');
-  doc.text(data.amount_formatted, 70, 105);
+  doc.text(data.amount_formatted_pdf || data.amount_formatted, 70, 105);
   
   doc.setFont(undefined, 'bold');
   doc.text('Platform Fee (1%):', 20, 112);
   doc.setFont(undefined, 'normal');
-  doc.text(data.platform_fee_formatted, 70, 112);
+  doc.text(data.platform_fee_formatted_pdf || data.platform_fee_formatted, 70, 112);
   
   doc.setFont(undefined, 'bold');
   doc.text('Influencer Amount:', 20, 119);
   doc.setFont(undefined, 'normal');
-  doc.text(data.influencer_amount_formatted, 70, 119);
+  doc.text(data.influencer_amount_formatted_pdf || data.influencer_amount_formatted, 70, 119);
   
   doc.setFont(undefined, 'bold');
   doc.text('Status:', 20, 126);
@@ -111,6 +111,16 @@ export const generatePaymentReceipt = (data) => {
 }
 
 /**
+ * Format currency for PDF (fallback if PDF-friendly format not provided)
+ * @param {number} amount - Amount to format
+ * @returns {string} Formatted amount
+ */
+const formatCurrencyForPDF = (amount) => {
+  if (amount === null || amount === undefined) return '';
+  return `Rs. ${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
  * Download a payment receipt as PDF
  * @param {Object} payment - Payment object
  * @param {function} formatCurrency - Function to format currency
@@ -123,9 +133,13 @@ export const downloadPaymentReceipt = (payment, formatCurrency) => {
     campaign_name: payment.campaign_name || 'Campaign',
     sponsor_name: payment.sponsor_name || 'Sponsor',
     influencer_name: payment.influencer_name || 'Influencer',
+    // Use PDF-friendly formats if available, otherwise fall back to standard formats or generate them
     amount_formatted: payment.amount_formatted || formatCurrency(payment.amount || 0),
+    amount_formatted_pdf: payment.amount_formatted_pdf || formatCurrencyForPDF(payment.amount || 0),
     platform_fee_formatted: payment.platform_fee_formatted || formatCurrency(payment.platform_fee || 0),
+    platform_fee_formatted_pdf: payment.platform_fee_formatted_pdf || formatCurrencyForPDF(payment.platform_fee || 0),
     influencer_amount_formatted: payment.influencer_amount_formatted || formatCurrency(payment.influencer_amount || 0),
+    influencer_amount_formatted_pdf: payment.influencer_amount_formatted_pdf || formatCurrencyForPDF(payment.influencer_amount || 0),
     status: payment.status || 'Completed'
   }
   

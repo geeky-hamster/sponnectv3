@@ -443,7 +443,11 @@ const downloadReceipt = (payment) => {
     ...payment,
     campaign_name: adRequest.value?.campaign_name,
     sponsor_name: adRequest.value?.sponsor_name,
-    influencer_name: adRequest.value?.influencer_name
+    influencer_name: adRequest.value?.influencer_name,
+    // Add PDF-friendly formatted values if not already present
+    amount_formatted_pdf: payment.amount_formatted_pdf || `Rs. ${payment.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+    platform_fee_formatted_pdf: payment.platform_fee_formatted_pdf || `Rs. ${payment.platform_fee.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+    influencer_amount_formatted_pdf: payment.influencer_amount_formatted_pdf || `Rs. ${payment.influencer_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
   }
   
   downloadPaymentReceipt(enhancedPayment, formatCurrency)

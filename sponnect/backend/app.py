@@ -115,6 +115,13 @@ def format_currency(amount):
         return None
     return f"{CURRENCY_SYMBOL}{amount:,.2f}"
 
+def format_currency_pdf(amount):
+    """Format amount as Indian Rupees for PDF export compatibility
+    Uses 'Rs.' instead of ₹ symbol to avoid PDF rendering issues"""
+    if amount is None:
+        return None
+    return f"Rs. {amount:,.2f}"
+
 def utc_to_ist(utc_datetime):
     """Convert UTC datetime to IST timezone"""
     if utc_datetime is None:
@@ -2235,17 +2242,22 @@ def serialize_payment(payment):
         'ad_request_id': payment.ad_request_id,
         'amount': payment.amount,
         'amount_formatted': format_currency(payment.amount),
+        'amount_formatted_pdf': format_currency_pdf(payment.amount),
         'platform_fee': payment.platform_fee,
         'platform_fee_formatted': format_currency(payment.platform_fee),
+        'platform_fee_formatted_pdf': format_currency_pdf(payment.platform_fee),
         'influencer_amount': payment.influencer_amount,
         'influencer_amount_formatted': format_currency(payment.influencer_amount),
+        'influencer_amount_formatted_pdf': format_currency_pdf(payment.influencer_amount),
         'status': payment.status,
         'payment_method': payment.payment_method,
         'transaction_id': payment.transaction_id,
         'created_at': format_datetime(payment.created_at) if payment.created_at else None,
         'updated_at': format_datetime(payment.updated_at) if payment.updated_at else None,
         'created_at_iso': payment.created_at.isoformat() if payment.created_at else None,
-        'updated_at_iso': payment.updated_at.isoformat() if payment.updated_at else None
+        'updated_at_iso': payment.updated_at.isoformat() if payment.updated_at else None,
+        'currency_symbol': CURRENCY_SYMBOL,
+        'currency_code': 'INR'
     }
 
 # == Influencer: Progress Updates ==
@@ -2568,12 +2580,18 @@ def get_payment_receipt(payment_id):
             "influencer_name": influencer.username if influencer else "Unknown",
             "amount": payment.amount,
             "amount_formatted": format_currency(payment.amount),
+            "amount_formatted_pdf": format_currency_pdf(payment.amount),
             "platform_fee": payment.platform_fee,
             "platform_fee_formatted": format_currency(payment.platform_fee),
+            "platform_fee_formatted_pdf": format_currency_pdf(payment.platform_fee),
             "influencer_amount": payment.influencer_amount,
             "influencer_amount_formatted": format_currency(payment.influencer_amount),
+            "influencer_amount_formatted_pdf": format_currency_pdf(payment.influencer_amount),
             "payment_method": payment.payment_method,
-            "status": payment.status
+            "status": payment.status,
+            "currency_symbol": CURRENCY_SYMBOL,
+            "currency_code": "INR",
+            "currency_name": "Indian Rupee"
         }
         
         return jsonify(receipt), 200

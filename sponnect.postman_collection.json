@@ -1,0 +1,1390 @@
+{
+	"info": {
+		"_postman_id": "7e8f3b2d-5a6c-4d07-ae21-b9b2f8a12345",
+		"name": "Sponnect API",
+		"description": "Complete API collection for testing the Sponnect platform",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "adminToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "sponsorToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "influencerToken",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register Sponsor",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"testsponsor\",\n    \"email\": \"sponsor@test.com\",\n    \"password\": \"Password123!\",\n    \"role\": \"sponsor\",\n    \"company_name\": \"Test Company\",\n    \"industry\": \"Technology\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"register"
+							]
+						},
+						"description": "Register a new sponsor account"
+					},
+					"response": []
+				},
+				{
+					"name": "Register Influencer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"testinfluencer\",\n    \"email\": \"influencer@test.com\",\n    \"password\": \"Password123!\",\n    \"role\": \"influencer\",\n    \"influencer_name\": \"Test Influencer\",\n    \"category\": \"Entertainment\",\n    \"niche\": \"Comedy\",\n    \"reach\": 50000\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"register"
+							]
+						},
+						"description": "Register a new influencer account"
+					},
+					"response": []
+				},
+				{
+					"name": "Login Admin",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"if (jsonData.access_token) {",
+									"    pm.collectionVariables.set(\"adminToken\", jsonData.access_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@sponnect.com\",\n    \"password\": \"adminpass\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"login"
+							]
+						},
+						"description": "Login as admin"
+					},
+					"response": []
+				},
+				{
+					"name": "Login Sponsor",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"if (jsonData.access_token) {",
+									"    pm.collectionVariables.set(\"sponsorToken\", jsonData.access_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"testsponsor\",\n    \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"login"
+							]
+						},
+						"description": "Login as sponsor"
+					},
+					"response": []
+				},
+				{
+					"name": "Login Influencer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"if (jsonData.access_token) {",
+									"    pm.collectionVariables.set(\"influencerToken\", jsonData.access_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"testinfluencer\",\n    \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"login"
+							]
+						},
+						"description": "Login as influencer"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for user registration and login"
+		},
+		{
+			"name": "Admin",
+			"item": [
+				{
+					"name": "Get Admin Stats",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/stats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"stats"
+							]
+						},
+						"description": "Get platform statistics for admin dashboard"
+					},
+					"response": []
+				},
+				{
+					"name": "List Pending Users",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/pending_users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"pending_users"
+							]
+						},
+						"description": "Get all pending user approvals"
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Sponsor",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/sponsors/1/approve",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"sponsors",
+								"1",
+								"approve"
+							]
+						},
+						"description": "Approve a sponsor account"
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Influencer",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/influencers/2/approve",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"influencers",
+								"2",
+								"approve"
+							]
+						},
+						"description": "Approve an influencer account"
+					},
+					"response": []
+				},
+				{
+					"name": "List All Users",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"users"
+							]
+						},
+						"description": "List all users with pagination and filtering"
+					},
+					"response": []
+				},
+				{
+					"name": "Flag User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/users/2/flag",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"users",
+								"2",
+								"flag"
+							]
+						},
+						"description": "Flag a user account"
+					},
+					"response": []
+				},
+				{
+					"name": "List All Campaigns",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/campaigns",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"campaigns"
+							]
+						},
+						"description": "List all campaigns with pagination and filtering"
+					},
+					"response": []
+				}
+			],
+			"description": "Admin-specific endpoints"
+		},
+		{
+			"name": "Profile",
+			"item": [
+				{
+					"name": "Get Own Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"profile"
+							]
+						},
+						"description": "Get the profile of the currently logged-in user"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"company_name\": \"Updated Company Name\",\n    \"industry\": \"Finance\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"profile"
+							]
+						},
+						"description": "Update the profile of the currently logged-in user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Influencer Public Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/influencers/2/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"influencers",
+								"2",
+								"profile"
+							]
+						},
+						"description": "Get the public profile of an influencer"
+					},
+					"response": []
+				}
+			],
+			"description": "Profile management endpoints"
+		},
+		{
+			"name": "Sponsor - Campaigns",
+			"item": [
+				{
+					"name": "Create Campaign",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"if (jsonData.campaign && jsonData.campaign.id) {",
+									"    pm.collectionVariables.set(\"campaignId\", jsonData.campaign.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Test Campaign\",\n    \"description\": \"This is a test campaign description\",\n    \"goals\": \"Increase brand awareness\",\n    \"budget\": 50000,\n    \"category\": \"Technology\",\n    \"start_date\": \"2023-12-01T00:00:00Z\",\n    \"end_date\": \"2023-12-31T00:00:00Z\",\n    \"visibility\": \"public\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsor/campaigns",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsor",
+								"campaigns"
+							]
+						},
+						"description": "Create a new campaign as a sponsor"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Campaigns",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsor/campaigns",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsor",
+								"campaigns"
+							]
+						},
+						"description": "Get all campaigns for the logged-in sponsor"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Campaign Details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsor/campaigns/{{campaignId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsor",
+								"campaigns",
+								"{{campaignId}}"
+							]
+						},
+						"description": "Get details of a specific campaign"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Campaign",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Updated Campaign Name\",\n    \"description\": \"Updated description\",\n    \"budget\": 55000\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsor/campaigns/{{campaignId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsor",
+								"campaigns",
+								"{{campaignId}}"
+							]
+						},
+						"description": "Update a campaign's details"
+					},
+					"response": []
+				}
+			],
+			"description": "Sponsor campaign management endpoints"
+		},
+		{
+			"name": "Sponsor - Ad Requests",
+			"item": [
+				{
+					"name": "Create Ad Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"if (jsonData.ad_request && jsonData.ad_request.id) {",
+									"    pm.collectionVariables.set(\"adRequestId\", jsonData.ad_request.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"influencer_id\": 2,\n    \"requirements\": \"Create a 1-minute video showcasing our product\",\n    \"payment_amount\": 10000,\n    \"message\": \"We'd love to work with you on this campaign\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsor/campaigns/{{campaignId}}/ad_requests",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsor",
+								"campaigns",
+								"{{campaignId}}",
+								"ad_requests"
+							]
+						},
+						"description": "Create a new ad request for an influencer"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Ad Requests",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsor/ad_requests",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsor",
+								"ad_requests"
+							]
+						},
+						"description": "Get all ad requests for the logged-in sponsor"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Ad Request Details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsor/ad_requests/{{adRequestId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsor",
+								"ad_requests",
+								"{{adRequestId}}"
+							]
+						},
+						"description": "Get details of a specific ad request"
+					},
+					"response": []
+				},
+				{
+					"name": "Negotiate Ad Request",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"action\": \"negotiate\",\n    \"payment_amount\": 9000,\n    \"message\": \"We'd like to counter-offer with this amount\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsor/ad_requests/{{adRequestId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsor",
+								"ad_requests",
+								"{{adRequestId}}"
+							]
+						},
+						"description": "Negotiate an ad request by countering, accepting, or rejecting"
+					},
+					"response": []
+				}
+			],
+			"description": "Sponsor ad request management endpoints"
+		},
+		{
+			"name": "Influencer",
+			"item": [
+				{
+					"name": "Get Ad Requests",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{influencerToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/influencer/ad_requests",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"influencer",
+								"ad_requests"
+							]
+						},
+						"description": "Get all ad requests for the logged-in influencer"
+					},
+					"response": []
+				},
+				{
+					"name": "Respond to Ad Request",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{influencerToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"action\": \"negotiate\",\n    \"payment_amount\": 12000,\n    \"message\": \"I'd like to counter-offer with this amount based on the work involved\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/influencer/ad_requests/{{adRequestId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"influencer",
+								"ad_requests",
+								"{{adRequestId}}"
+							]
+						},
+						"description": "Respond to an ad request as an influencer"
+					},
+					"response": []
+				},
+				{
+					"name": "Apply to Campaign",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{influencerToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"payment_amount\": 15000,\n    \"message\": \"I'm interested in working on this campaign\",\n    \"requirements\": \"I can create a video and share on my social media accounts\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/influencer/campaigns/{{campaignId}}/apply",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"influencer",
+								"campaigns",
+								"{{campaignId}}",
+								"apply"
+							]
+						},
+						"description": "Apply to a public campaign as an influencer"
+					},
+					"response": []
+				},
+				{
+					"name": "Add Progress Update",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{influencerToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"content\": \"I've completed the video for the campaign\",\n    \"media_urls\": [\"https://example.com/video1.mp4\", \"https://example.com/screenshot1.jpg\"],\n    \"metrics_data\": {\n        \"views\": 5000,\n        \"likes\": 1200,\n        \"comments\": 150,\n        \"shares\": 75\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/influencer/ad_requests/{{adRequestId}}/progress",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"influencer",
+								"ad_requests",
+								"{{adRequestId}}",
+								"progress"
+							]
+						},
+						"description": "Add a progress update to an accepted ad request"
+					},
+					"response": []
+				}
+			],
+			"description": "Influencer-specific endpoints"
+		},
+		{
+			"name": "Search and Discovery",
+			"item": [
+				{
+					"name": "Search Influencers",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/search/influencers?category=Entertainment&min_reach=10000",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"search",
+								"influencers"
+							],
+							"query": [
+								{
+									"key": "category",
+									"value": "Entertainment"
+								},
+								{
+									"key": "min_reach",
+									"value": "10000"
+								}
+							]
+						},
+						"description": "Search for influencers with filters"
+					},
+					"response": []
+				},
+				{
+					"name": "Search Campaigns",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{influencerToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/search/campaigns?category=Technology&min_budget=10000",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"search",
+								"campaigns"
+							],
+							"query": [
+								{
+									"key": "category",
+									"value": "Technology"
+								},
+								{
+									"key": "min_budget",
+									"value": "10000"
+								}
+							]
+						},
+						"description": "Search for public campaigns with filters"
+					},
+					"response": []
+				}
+			],
+			"description": "Search and discovery endpoints"
+		},
+		{
+			"name": "Payments",
+			"item": [
+				{
+					"name": "Create Payment",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"amount\": 10000,\n    \"payment_type\": \"full\",\n    \"message\": \"Payment for completed work\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsor/ad_requests/{{adRequestId}}/payments",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsor",
+								"ad_requests",
+								"{{adRequestId}}",
+								"payments"
+							]
+						},
+						"description": "Create a payment for an ad request"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Payment Receipt",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{sponsorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsor/payments/1/receipt",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsor",
+								"payments",
+								"1",
+								"receipt"
+							]
+						},
+						"description": "Get a payment receipt"
+					},
+					"response": []
+				}
+			],
+			"description": "Payment-related endpoints"
+		},
+		{
+			"name": "Analytics",
+			"item": [
+				{
+					"name": "User Growth Charts",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/charts/user-growth?months=6",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"charts",
+								"user-growth"
+							],
+							"query": [
+								{
+									"key": "months",
+									"value": "6"
+								}
+							]
+						},
+						"description": "Get user growth chart data"
+					},
+					"response": []
+				},
+				{
+					"name": "Ad Request Status Charts",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/charts/ad-request-status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"charts",
+								"ad-request-status"
+							]
+						},
+						"description": "Get ad request status distribution chart data"
+					},
+					"response": []
+				},
+				{
+					"name": "Dashboard Summary",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/charts/dashboard-summary",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"charts",
+								"dashboard-summary"
+							]
+						},
+						"description": "Get dashboard summary charts and data"
+					},
+					"response": []
+				}
+			],
+			"description": "Analytics and chart data endpoints"
+		},
+		{
+			"name": "Utility",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/health",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"health"
+							]
+						},
+						"description": "Simple API health check"
+					},
+					"response": []
+				},
+				{
+					"name": "Test Celery Integration",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"test@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/test/celery",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"test",
+								"celery"
+							]
+						},
+						"description": "Test Celery task integration"
+					},
+					"response": []
+				}
+			],
+			"description": "Utility endpoints"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "campaignId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "adRequestId",
+			"value": "1",
+			"type": "string"
+		}
+	]
+} 

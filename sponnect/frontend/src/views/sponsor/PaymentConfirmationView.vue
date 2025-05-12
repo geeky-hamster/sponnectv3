@@ -129,10 +129,13 @@ const downloadReceipt = () => {
     influencer_name: adRequest.value?.influencer_name || 'Influencer',
     amount: paymentAmount.value,
     amount_formatted: paymentDetails.value?.amount_formatted || formatCurrency(paymentAmount.value),
+    amount_formatted_pdf: paymentDetails.value?.amount_formatted_pdf || `Rs. ${paymentAmount.value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
     platform_fee: paymentAmount.value * 0.01,
     platform_fee_formatted: paymentDetails.value?.platform_fee_formatted || formatCurrency(paymentAmount.value * 0.01),
+    platform_fee_formatted_pdf: paymentDetails.value?.platform_fee_formatted_pdf || `Rs. ${(paymentAmount.value * 0.01).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
     influencer_amount: paymentAmount.value * 0.99,
     influencer_amount_formatted: paymentDetails.value?.influencer_amount_formatted || formatCurrency(paymentAmount.value * 0.99),
+    influencer_amount_formatted_pdf: paymentDetails.value?.influencer_amount_formatted_pdf || `Rs. ${(paymentAmount.value * 0.99).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
     status: paymentDetails.value?.status || 'Completed'
   }
   

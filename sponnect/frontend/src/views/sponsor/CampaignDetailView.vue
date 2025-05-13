@@ -16,6 +16,7 @@ const applications = ref([])
 const error = ref('')
 const successMessage = ref('')
 const activeTab = ref('details')
+const applicationFilter = ref('Pending')
 
 // Modal states
 const showAdRequestModal = ref(false)
@@ -342,9 +343,45 @@ const canRespond = (request) => {
          (request.status === 'Negotiating' && request.last_offer_by === 'influencer')
 }
 
+// Filter applications based on filter setting
+const filteredApplications = computed(() => {
+  if (!applications.value || !Array.isArray(applications.value)) {
+    return []
+  }
+  
+  if (!applicationFilter.value) {
+    return applications.value
+  }
+  
+  return applications.value.filter(app => app.status === applicationFilter.value)
+})
+
 // Load data on component mount
 onMounted(() => {
   loadCampaign()
+  
+  // Check if a specific tab was requested in the URL query params
+  const urlParams = new URLSearchParams(window.location.search)
+  if (urlParams.get('tab')) {
+    activeTab.value = urlParams.get('tab')
+  }
+  
+  // Check if we need to highlight a specific application
+  const highlightId = urlParams.get('highlight')
+  if (highlightId && activeTab.value === 'applications') {
+    // Set a timeout to allow the applications to load first
+    setTimeout(() => {
+      const appElement = document.getElementById(`application-${highlightId}`)
+      if (appElement) {
+        appElement.scrollIntoView({ behavior: 'smooth' })
+        appElement.classList.add('highlight-row')
+        // Remove the highlight after 3 seconds
+        setTimeout(() => {
+          appElement.classList.remove('highlight-row')
+        }, 3000)
+      }
+    }, 500)
+  }
 })
 </script>
 
@@ -665,64 +702,164 @@ onMounted(() => {
           
           <!-- Applications Tab -->
           <div v-if="activeTab === 'applications'" class="tab-pane fade show active">
-            <div class="card border-0 shadow-sm">
-              <div class="card-body">
-                <h4 class="mb-4">Influencer Applications</h4>
-                
-                <div v-if="!Array.isArray(applications) || applications.length === 0" class="text-center py-4">
-                  <i class="bi bi-inbox display-4 text-muted"></i>
-                  <p class="mt-3 mb-1">No applications yet</p>
-                  <p class="text-muted">
-                    If your campaign is public, influencers can apply to collaborate.
-                  </p>
-                </div>
-                
-                <div v-else class="table-responsive">
-                  <table class="table table-hover align-middle">
-                    <thead class="table-light">
-                      <tr>
-                        <th>Influencer</th>
-                        <th>Requested Payment</th>
-                        <th>Date Applied</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="application in applications" :key="application.id">
-                        <td>{{ application.influencer_name }}</td>
-                        <td>{{ formatCurrency(application.payment_amount) }}</td>
-                        <td>{{ formatDate(application.created_at) }}</td>
-                        <td>
-                          <span 
-                            :class="{
-                              'badge rounded-pill bg-warning': application.status === 'Pending',
-                              'badge rounded-pill bg-success': application.status === 'Accepted',
-                              'badge rounded-pill bg-danger': application.status === 'Rejected'
-                            }"
+            <div class="row">
+              <div class="col-12">
+                <div class="card border-0 shadow-sm mb-4">
+                  <div class="card-header bg-white py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div>
+                        <h5 class="mb-1">Influencer Applications</h5>
+                        <p class="text-muted mb-0 small">
+                          <i class="bi bi-info-circle me-1"></i>
+                          These are applications sent by influencers interested in your campaign.
+                        </p>
+                      </div>
+                      <div>
+                        <div class="btn-group" role="group">
+                          <button
+                            type="button"
+                            class="btn"
+                            :class="applicationFilter === 'Pending' ? 'btn-primary' : 'btn-outline-primary'"
+                            @click="applicationFilter = 'Pending'"
                           >
-                            {{ application.status }}
-                          </span>
-                        </td>
-                        <td>
-                          <div v-if="application.status === 'Pending'" class="btn-group">
-                            <button @click="openApplicationModal(application)" class="btn btn-sm btn-primary">
-                              <i class="bi bi-eye me-1"></i> View & Respond
-                            </button>
-                            <button @click="acceptApplication(application.id)" class="btn btn-sm btn-success">
-                              Accept
-                            </button>
-                            <button @click="rejectApplication(application.id)" class="btn btn-sm btn-danger">
-                              Reject
-                            </button>
-                          </div>
-                          <RouterLink v-else :to="`/sponsor/ad-requests/${application.ad_request_id}`" class="btn btn-sm btn-outline-primary">
-                            View Details
-                          </RouterLink>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                            Pending
+                            <span v-if="applications.filter(a => a.status === 'Pending').length" class="badge bg-danger ms-1">
+                              {{ applications.filter(a => a.status === 'Pending').length }}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            class="btn"
+                            :class="applicationFilter === 'Accepted' ? 'btn-success' : 'btn-outline-success'"
+                            @click="applicationFilter = 'Accepted'"
+                          >
+                            Accepted
+                          </button>
+                          <button
+                            type="button"
+                            class="btn"
+                            :class="applicationFilter === 'Rejected' ? 'btn-danger' : 'btn-outline-danger'"
+                            @click="applicationFilter = 'Rejected'"
+                          >
+                            Rejected
+                          </button>
+                          <button
+                            type="button"
+                            class="btn"
+                            :class="applicationFilter === '' ? 'btn-secondary' : 'btn-outline-secondary'"
+                            @click="applicationFilter = ''"
+                          >
+                            All
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="card-body p-0">
+                    <div v-if="loading" class="p-4 text-center">
+                      <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                      </div>
+                      <p class="mt-2 mb-0">Loading applications...</p>
+                    </div>
+                    
+                    <div v-else-if="!applications.length" class="p-4 text-center">
+                      <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No applications received yet
+                      </div>
+                    </div>
+                    
+                    <div v-else-if="!filteredApplications.length" class="p-4 text-center">
+                      <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No {{ applicationFilter.toLowerCase() }} applications found
+                      </div>
+                    </div>
+                    
+                    <div v-else class="table-responsive">
+                      <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                          <tr>
+                            <th>Influencer</th>
+                            <th>Requested Payment</th>
+                            <th>Date Applied</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr 
+                            v-for="app in filteredApplications" 
+                            :key="app.id"
+                            :id="`application-${app.id}`"
+                            :class="{ 'table-warning': app.status === 'Pending' }"
+                          >
+                            <td>
+                              <div class="d-flex align-items-center">
+                                <div class="avatar-placeholder bg-primary text-white rounded-circle me-2">
+                                  {{ app.influencer_name ? app.influencer_name.charAt(0).toUpperCase() : 'U' }}
+                                </div>
+                                <div>
+                                  <div class="fw-bold">{{ app.influencer_name }}</div>
+                                  <div class="small text-muted">@{{ app.influencer_username || 'unknown' }}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span class="fs-5 fw-bold text-primary">{{ formatCurrency(app.payment_amount) }}</span>
+                            </td>
+                            <td>{{ formatDate(app.created_at) }}</td>
+                            <td>
+                              <span 
+                                :class="{
+                                  'badge rounded-pill bg-warning': app.status === 'Pending',
+                                  'badge rounded-pill bg-success': app.status === 'Accepted',
+                                  'badge rounded-pill bg-danger': app.status === 'Rejected'
+                                }"
+                              >
+                                {{ app.status }}
+                              </span>
+                            </td>
+                            <td>
+                              <div class="btn-group" v-if="app.status === 'Pending'">
+                                <button
+                                  @click="openApplicationModal(app)"
+                                  class="btn btn-sm btn-outline-primary"
+                                  type="button"
+                                >
+                                  <i class="bi bi-eye me-1"></i> View
+                                </button>
+                                <button
+                                  @click="acceptApplication(app.id)"
+                                  class="btn btn-sm btn-success"
+                                  type="button"
+                                >
+                                  <i class="bi bi-check-circle me-1"></i> Accept
+                                </button>
+                                <button
+                                  @click="rejectApplication(app.id)"
+                                  class="btn btn-sm btn-danger"
+                                  type="button"
+                                >
+                                  <i class="bi bi-x-circle me-1"></i> Reject
+                                </button>
+                              </div>
+                              <button
+                                v-else
+                                @click="openApplicationModal(app)"
+                                class="btn btn-sm btn-outline-secondary"
+                                type="button"
+                              >
+                                <i class="bi bi-eye me-1"></i> View Details
+                              </button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1199,5 +1336,31 @@ onMounted(() => {
 
 .whitespace-pre-wrap {
   white-space: pre-wrap;
+}
+
+/* Highlight animation for newly highlighted application */
+.highlight-row {
+  animation: highlight-pulse 3s ease-in-out;
+}
+
+@keyframes highlight-pulse {
+  0% { background-color: rgba(255, 193, 7, 0.1); }
+  50% { background-color: rgba(255, 193, 7, 0.3); }
+  100% { background-color: rgba(255, 193, 7, 0); }
+}
+
+/* Avatar placeholder styles */
+.avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+/* Improve table styles */
+.table > tbody > tr.table-warning {
+  --bs-table-accent-bg: rgba(255, 193, 7, 0.1);
 }
 </style> 

@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
@@ -26,6 +26,31 @@ const userName = computed(() => {
 const logout = () => {
   authStore.logout()
 }
+
+// Initialize Bootstrap dropdowns properly
+onMounted(() => {
+  try {
+    // Check if Bootstrap is available
+    if (typeof bootstrap !== 'undefined') {
+      // Get all dropdowns on the page
+      const dropdownElementList = document.querySelectorAll('.dropdown-toggle')
+      
+      // Initialize each dropdown
+      const dropdownList = [...dropdownElementList].map(dropdownToggleEl => {
+        return new bootstrap.Dropdown(dropdownToggleEl, {
+          // Prevent dropdown from closing when clicking inside
+          autoClose: 'outside'  
+        })
+      })
+      
+      console.log('Dropdowns initialized:', dropdownList.length)
+    } else {
+      console.warn('Bootstrap JS not loaded, dropdowns may not work correctly')
+    }
+  } catch (err) {
+    console.error('Error initializing dropdowns:', err)
+  }
+})
 </script>
 
 <template>
@@ -184,11 +209,28 @@ const logout = () => {
 .navbar {
   background-color: transparent !important;
   position: relative;
-  z-index: 1;
+  z-index: 100; /* Increase z-index for proper stacking */
 }
 
 .dropdown-menu {
   z-index: 9999;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border: none;
+  padding: 0.5rem 0;
+}
+
+.dropdown-item {
+  padding: 0.5rem 1rem;
+  transition: all 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background-color: #f8f9fa;
+}
+
+.dropdown-item i {
+  color: #6c757d;
 }
 
 .nav-link{
@@ -214,6 +256,7 @@ const logout = () => {
   font-size: 1.5rem;
 }
 
+/* Fix dropdown on mobile screens */
 @media (max-width: 992px) {
   .navbar-nav {
     padding: 1rem 0;
@@ -221,6 +264,29 @@ const logout = () => {
   
   .nav-item {
     margin-bottom: 0.5rem;
+  }
+  
+  .dropdown-menu {
+    background-color: rgba(0, 0, 0, 0.1);
+    border: none;
+    box-shadow: none;
+    position: static !important;
+    width: 100%;
+    margin-top: 0;
+    padding-left: 1rem;
+  }
+  
+  .dropdown-item {
+    color: white;
+  }
+  
+  .dropdown-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+  }
+  
+  .dropdown-item i {
+    color: white;
   }
 }
 </style> 

@@ -1,13 +1,15 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
 import { sponsorService } from '../../services/api'
-import { formatDate } from '../../utils/dateUtils'
+import { formatDate, formatCurrency } from '../../utils/formatters'
 
 const loading = ref(true)
 const campaigns = ref([])
 const adRequests = ref([])
 const error = ref('')
 const stats = ref({})
+const pendingApplications = ref([])
 
 onMounted(async () => {
   try {
@@ -22,6 +24,37 @@ onMounted(async () => {
     campaigns.value = campaignsResponse.data
     adRequests.value = requestsResponse.data.ad_requests || requestsResponse.data || []
     
+    // Now fetch pending applications for all active campaigns
+    const activeCampaigns = campaigns.value.filter(c => c.status === 'active')
+    pendingApplications.value = []
+    
+    // Only proceed if there are active campaigns
+    if (activeCampaigns.length > 0) {
+      // Get pending applications from each active campaign (limit to 5 most recent ones)
+      const applicationsPromises = activeCampaigns.slice(0, 5).map(campaign => 
+        sponsorService.getCampaignApplications(campaign.id, { status: 'Pending' })
+      )
+      
+      const applicationsResults = await Promise.all(applicationsPromises)
+      
+      // Combine all applications and add campaign info
+      applicationsResults.forEach((result, index) => {
+        if (result.data?.applications && Array.isArray(result.data.applications)) {
+          // Add campaign name to each application for display
+          const appsWithCampaign = result.data.applications.map(app => ({
+            ...app,
+            campaign_name: activeCampaigns[index].name
+          }))
+          pendingApplications.value.push(...appsWithCampaign)
+        }
+      })
+      
+      // Sort by most recent first and limit to 5
+      pendingApplications.value.sort((a, b) => {
+        return new Date(b.created_at_iso) - new Date(a.created_at_iso)
+      })
+      pendingApplications.value = pendingApplications.value.slice(0, 5)
+    }
   } catch (err) {
     console.error('Error loading sponsor dashboard:', err)
     error.value = 'Failed to load dashboard data. Please try again.'
@@ -93,6 +126,47 @@ onMounted(async () => {
           </div>
         </div>
         
+        <!-- Pending Applications Section - NEW -->
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+            <h5 class="mb-0">Pending Applications</h5>
+            <RouterLink to="/sponsor/applications" class="btn btn-sm btn-primary">
+              View All Applications
+            </RouterLink>
+          </div>
+          <div class="card-body p-0">
+            <div v-if="!pendingApplications.length" class="p-4 text-center">
+              <p class="mb-0">No pending applications at the moment.</p>
+            </div>
+            <div v-else class="table-responsive">
+              <table class="table align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Influencer</th>
+                    <th>Campaign</th>
+                    <th>Requested Amount</th>
+                    <th>Date Applied</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="app in pendingApplications" :key="app.id">
+                    <td>{{ app.influencer_name }}</td>
+                    <td>{{ app.campaign_name }}</td>
+                    <td>{{ formatCurrency(app.payment_amount) }}</td>
+                    <td>{{ formatDate(app.created_at) }}</td>
+                    <td>
+                      <RouterLink :to="`/sponsor/campaigns/${app.campaign_id}?tab=applications&highlight=${app.id}`" class="btn btn-sm btn-primary">
+                        Review
+                      </RouterLink>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
         <!-- Recent Campaigns -->
         <div class="card border-0 content-card mb-4">
           <div class="card-header bg-white border-0 py-3">
@@ -127,10 +201,25 @@ onMounted(async () => {
                     <td>₹{{ campaign.budget.toLocaleString('en-IN', ) }}</td>
                     <td>
                       <span :class="{
-                        'badge rounded-pill bg-success': campaign.is_visible,
-                        'badge rounded-pill bg-secondary': !campaign.is_visible
+                        'badge rounded-pill bg-success': campaign.status === 'active',
+                        'badge rounded-pill bg-secondary': campaign.status === 'draft',
+                        'badge rounded-pill bg-info': campaign.status === 'completed',
+                        'badge rounded-pill bg-warning': campaign.status === 'paused' || campaign.status === 'pending_approval',
+                        'badge rounded-pill bg-danger': campaign.status === 'rejected'
                       }">
-                        {{ campaign.is_visible ? 'Public' : 'Draft' }}
+                        {{ campaign.status === 'active' ? 'Active' :
+                           campaign.status === 'completed' ? 'Completed' :
+                           campaign.status === 'paused' ? 'Paused' :
+                           campaign.status === 'draft' ? 'Draft' :
+                           campaign.status === 'pending_approval' ? 'Pending Approval' :
+                           campaign.status === 'rejected' ? 'Rejected' : 
+                           campaign.status }}
+                      </span>
+                      <span v-if="campaign.visibility === 'public'" class="badge rounded-pill bg-primary ms-1">
+                        Public
+                      </span>
+                      <span v-else class="badge rounded-pill bg-secondary ms-1">
+                        Private
                       </span>
                     </td>
                     <td>{{ formatDate(campaign.created_at) }}</td>

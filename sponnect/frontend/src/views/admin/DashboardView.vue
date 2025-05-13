@@ -5,6 +5,8 @@ import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatte
 
 const loading = ref(true)
 const error = ref('')
+const refreshing = ref(false)
+const refreshCount = ref(0)
 const stats = ref({
   total_users: 0,
   active_sponsors: 0,
@@ -41,7 +43,8 @@ const dashboardSummary = ref({
   conversionRate: {
     value: 0,
     label: 'Acceptance Rate'
-  }
+  },
+  avgCampaignBudget: 0
 })
 // Set auto-refresh interval (10 seconds for more real-time data)
 let refreshInterval = null
@@ -69,9 +72,14 @@ const calculatePercentage = (status) => {
 }
 
 // Function to load admin data
-const loadAdminData = async () => {
+const loadAdminData = async (isManualRefresh = false) => {
   try {
-    loading.value = true;
+    if (isManualRefresh) {
+      refreshing.value = true;
+      refreshCount.value++;
+    } else {
+      loading.value = true;
+    }
     error.value = '';
     
     // Make all API calls in parallel for real-time data
@@ -116,7 +124,8 @@ const loadAdminData = async () => {
           userSummary: { labels: [], datasets: [] },
           campaignVisibility: { labels: [], datasets: [] },
           adRequestStatus: { labels: [], datasets: [] },
-          conversionRate: { value: 0, label: 'Acceptance Rate' }
+          conversionRate: { value: 0, label: 'Acceptance Rate' },
+          avgCampaignBudget: 0
         }};
       })
     ]);
@@ -178,15 +187,21 @@ const loadAdminData = async () => {
     error.value = 'Failed to load admin dashboard data. Please refresh the page or try again later.';
   } finally {
     loading.value = false;
+    refreshing.value = false;
   }
+}
+
+// Function for manual refresh
+const refreshDashboard = () => {
+  loadAdminData(true);
 }
 
 onMounted(() => {
   // Load data immediately
   loadAdminData()
   
-  // Set up auto-refresh every 10 seconds for more real-time data
-  refreshInterval = setInterval(loadAdminData, 10000)
+  // Set up auto-refresh every 60 seconds instead of 10 seconds to reduce refresh frequency
+  refreshInterval = setInterval(() => loadAdminData(false), 60000)
 })
 
 // Clean up interval when component unmounts
@@ -298,14 +313,17 @@ const rejectUser = async (user) => {
     <div class="container">
       <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="dashboard-title">Admin Dashboard</h1>
-        <div>
+        <div class="d-flex align-items-center">
           <div class="badge bg-success me-2 d-inline-flex align-items-center">
-            <span class="me-1">Real-time</span>
+            <span class="me-1">Auto-refresh: 60s</span>
             <span class="pulse-dot"></span>
           </div>
-        <button @click="loadAdminData" class="btn btn-outline-primary" title="Refresh Dashboard">
-          <i class="bi bi-arrow-clockwise me-1"></i> Refresh
-        </button>
+          <button @click="refreshDashboard" class="btn btn-outline-primary" 
+                  :disabled="refreshing" title="Manually refresh dashboard data">
+            <i class="bi" :class="refreshing ? 'bi-arrow-repeat spin' : 'bi-arrow-clockwise'"></i>
+            <span class="ms-1">{{ refreshing ? 'Refreshing...' : 'Refresh' }}</span>
+            <small v-if="refreshCount > 0" class="ms-1">({{ refreshCount }})</small>
+          </button>
         </div>
       </div>
       
@@ -506,7 +524,7 @@ const rejectUser = async (user) => {
                     <div class="card bg-light border-0 campaign-stat-card">
                       <div class="card-body py-3">
                         <h6 class="text-primary mb-1">Avg. Budget</h6>
-                        <h4 class="mb-0">{{ formatCurrency(5000) }}</h4> <!-- Placeholder - replace with actual data if available -->
+                        <h4 class="mb-0">{{ formatCurrency(dashboardSummary.avgCampaignBudget || 0) }}</h4>
                       </div>
                     </div>
                   </div>
@@ -1145,5 +1163,14 @@ const rejectUser = async (user) => {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style> 

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { influencerService, searchService } from '../../services/api'
 import { formatDate } from '../../utils/dateUtils'
 
@@ -7,6 +7,82 @@ const loading = ref(true)
 const adRequests = ref([])
 const publicCampaigns = ref([])
 const error = ref('')
+const showDebugInfo = ref(false)
+const debugMessages = ref([])
+
+// Helper function to add debug messages
+const addDebugMessage = (message) => {
+  const timestamp = new Date().toLocaleTimeString()
+  debugMessages.value.unshift(`${timestamp}: ${message}`)
+  // Limit debug history to 10 messages
+  if (debugMessages.value.length > 10) {
+    debugMessages.value.pop()
+  }
+}
+
+// Manual refresh function
+const refreshDashboard = async () => {
+  try {
+    addDebugMessage('Manually refreshing dashboard...')
+    loading.value = true
+    error.value = ''
+    
+    // Fetch influencer data
+    const [requestsResponse, campaignsResponse] = await Promise.all([
+      influencerService.getAdRequests(),
+      searchService.searchCampaigns({
+        _t: Date.now() // Add timestamp to prevent caching
+      })
+    ])
+    
+    adRequests.value = Array.isArray(requestsResponse.data) ? requestsResponse.data : []
+    addDebugMessage(`Loaded ${adRequests.value.length} ad requests`)
+    
+    // Properly extract campaigns from the response
+    if (campaignsResponse.data) {
+      addDebugMessage(`Campaign response type: ${typeof campaignsResponse.data}`)
+      
+      if (campaignsResponse.data.campaigns && Array.isArray(campaignsResponse.data.campaigns)) {
+        // Response with pagination object format
+        publicCampaigns.value = campaignsResponse.data.campaigns.slice(0, 5)
+        addDebugMessage(`Extracted ${publicCampaigns.value.length} campaigns from pagination format`)
+      } else if (Array.isArray(campaignsResponse.data)) {
+        // Direct array format 
+        publicCampaigns.value = campaignsResponse.data.slice(0, 5)
+        addDebugMessage(`Extracted ${publicCampaigns.value.length} campaigns from array format`)
+      } else {
+        console.error('Unexpected campaigns response format:', campaignsResponse.data)
+        addDebugMessage(`Error: Unexpected response format - ${JSON.stringify(campaignsResponse.data).substring(0, 100)}...`)
+        publicCampaigns.value = []
+      }
+    } else {
+      console.error('No data in campaigns response')
+      addDebugMessage('Error: No data in campaigns response')
+      publicCampaigns.value = []
+    }
+    
+  } catch (err) {
+    console.error('Error refreshing dashboard:', err)
+    addDebugMessage(`Error refreshing: ${err.message}`)
+    error.value = 'Failed to refresh dashboard data. Please try again.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// Toggle debug info
+const toggleDebugInfo = () => {
+  showDebugInfo.value = !showDebugInfo.value
+}
+
+// Development mode check
+const isDevelopmentMode = computed(() => {
+  try {
+    return import.meta.env.DEV === true
+  } catch (e) {
+    return false
+  }
+})
 
 onMounted(async () => {
   try {
@@ -15,11 +91,32 @@ onMounted(async () => {
     // Fetch influencer data
     const [requestsResponse, campaignsResponse] = await Promise.all([
       influencerService.getAdRequests(),
-      searchService.searchCampaigns() // Get public campaigns
+      searchService.searchCampaigns({
+        _t: Date.now() // Add timestamp to prevent caching
+      })
     ])
     
     adRequests.value = Array.isArray(requestsResponse.data) ? requestsResponse.data : []
-    publicCampaigns.value = Array.isArray(campaignsResponse.data) ? campaignsResponse.data.slice(0, 5) : [] // Limit to 5 campaigns
+    
+    // Properly extract campaigns from the response
+    if (campaignsResponse.data) {
+      if (campaignsResponse.data.campaigns && Array.isArray(campaignsResponse.data.campaigns)) {
+        // Response with pagination object format
+        publicCampaigns.value = campaignsResponse.data.campaigns.slice(0, 5)
+      } else if (Array.isArray(campaignsResponse.data)) {
+        // Direct array format 
+        publicCampaigns.value = campaignsResponse.data.slice(0, 5)
+      } else {
+        console.error('Unexpected campaigns response format:', campaignsResponse.data)
+        publicCampaigns.value = []
+      }
+    } else {
+      console.error('No data in campaigns response')
+      publicCampaigns.value = []
+    }
+    
+    // Add debug log
+    console.log(`Loaded ${publicCampaigns.value.length} campaigns for dashboard`)
     
   } catch (err) {
     console.error('Error loading influencer dashboard:', err)
@@ -35,6 +132,38 @@ onMounted(async () => {
     <div class="container">
       <h1 class="mb-4 dashboard-title">Influencer Dashboard</h1>
       
+      <!-- Debug panel (only visible in development mode) -->
+      <div v-if="isDevelopmentMode" class="card mb-4 bg-light">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Debug Tools</h5>
+            <div>
+              <button @click="refreshDashboard" class="btn btn-sm btn-primary me-2">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refresh Data
+              </button>
+              <button @click="toggleDebugInfo" class="btn btn-sm btn-secondary">
+                {{ showDebugInfo ? 'Hide' : 'Show' }} Debug Info
+              </button>
+            </div>
+          </div>
+          
+          <div v-if="showDebugInfo" class="mt-3">
+            <div class="alert alert-info">
+              <strong>Dashboard Status:</strong> 
+              <span class="ms-2">Ad Requests: {{ adRequests.length }}</span> | 
+              <span>Campaigns: {{ publicCampaigns.length }}</span>
+            </div>
+            <div class="mt-2">
+              <strong>Debug Log:</strong>
+              <div class="bg-dark text-light p-2 mt-1" style="max-height: 200px; overflow: auto; font-size: 12px;">
+                <div v-for="(msg, idx) in debugMessages" :key="idx">{{ msg }}</div>
+                <div v-if="!debugMessages.length">No debug messages yet</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <div v-if="loading" class="text-center py-5">
         <div class="spinner-border text-primary" role="status">
           <span class="visually-hidden">Loading...</span>
@@ -44,6 +173,7 @@ onMounted(async () => {
       
       <div v-else-if="error" class="alert alert-danger">
         {{ error }}
+        <button @click="refreshDashboard" class="btn btn-sm btn-outline-danger ms-3">Try Again</button>
       </div>
       
       <div v-else>
@@ -151,14 +281,22 @@ onMounted(async () => {
           <div class="card-header bg-white border-0 py-3">
             <div class="d-flex justify-content-between align-items-center">
               <h4 class="mb-0">Available Campaigns</h4>
-              <router-link to="/influencer/campaigns/browse" class="btn btn-primary btn-sm">
-                Browse All
-              </router-link>
+              <div>
+                <button v-if="isDevelopmentMode" @click="refreshDashboard" class="btn btn-sm btn-outline-secondary me-2">
+                  <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+                <router-link to="/influencer/campaigns/browse" class="btn btn-primary btn-sm">
+                  Browse All
+                </router-link>
+              </div>
             </div>
           </div>
           <div class="card-body">
             <div v-if="!publicCampaigns.length" class="text-center">
               <p>No public campaigns available at the moment.</p>
+              <button class="btn btn-sm btn-outline-primary mt-2" @click="refreshDashboard">
+                <i class="bi bi-arrow-clockwise me-1"></i> Check Again
+              </button>
             </div>
             <div v-else class="row g-4">
               <div v-for="campaign in publicCampaigns" :key="campaign.id" class="col-md-6">

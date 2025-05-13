@@ -537,85 +537,112 @@ def update_profile():
 @app.route('/api/influencers/<int:influencer_id>/profile', methods=['GET'])
 @jwt_required() # Any logged-in user can view public profile
 def get_public_influencer_profile(influencer_id):
-    user = User.query.filter_by(id=influencer_id, role='influencer', is_active=True).first()
-    if not user: return jsonify({"message": "Active influencer not found"}), 404
+    user = User.query.filter_by(
+        id=influencer_id, 
+        role='influencer', 
+        is_active=True,
+        influencer_approved=True,
+        is_flagged=False
+    ).first()
+    
+    if not user: 
+        return jsonify({"message": "Influencer not found or unavailable"}), 404
+        
     # Return only public-safe info
-    return jsonify({'id': user.id, 'influencer_name': user.influencer_name, 'category': user.category,
-                    'niche': user.niche, 'reach': user.reach }), 200
+    return jsonify({
+        'id': user.id, 
+        'influencer_name': user.influencer_name, 
+        'category': user.category,
+        'niche': user.niche, 
+        'reach': user.reach 
+    }), 200
 
 # == Admin Actions ==
 @app.route('/api/admin/stats', methods=['GET'])
 @jwt_required()
 @admin_required
+@cache.cached(timeout=30)  # Cache for 30 seconds to balance freshness and performance
 def get_admin_stats():
     # Basic counts - can be expanded with date ranges, etc.
     total_users = db.session.query(func.count(User.id)).scalar()
     active_sponsors = User.query.filter_by(role='sponsor', is_active=True, sponsor_approved=True).count()
-    pending_sponsors = User.query.filter_by(role='sponsor', sponsor_approved=False).count()
+    pending_sponsors = User.query.filter_by(role='sponsor', sponsor_approved=None).count()
     active_influencers = User.query.filter_by(role='influencer', is_active=True, influencer_approved=True).count()
-    pending_influencers = User.query.filter_by(role='influencer', influencer_approved=False).count()
+    pending_influencers = User.query.filter_by(role='influencer', influencer_approved=None).count()
     public_campaigns = Campaign.query.filter_by(visibility='public').count()
     private_campaigns = Campaign.query.filter_by(visibility='private').count()
+    
+    # Get ad requests by status
+    ad_requests_by_status = {}
+    statuses = ['Pending', 'Accepted', 'Rejected', 'Negotiating']
+    for status in statuses:
+        count = AdRequest.query.filter_by(status=status).count()
+        ad_requests_by_status[status] = count
+    
+    # Get flagged content count
     flagged_users = User.query.filter_by(is_flagged=True).count()
     flagged_campaigns = Campaign.query.filter_by(is_flagged=True).count()
-    ad_request_stats = db.session.query(AdRequest.status, func.count(AdRequest.id)).group_by(AdRequest.status).all()
     
-    # Payment and fees stats
-    total_payments = db.session.query(func.sum(Payment.amount)).filter(Payment.status == 'Completed').scalar() or 0
-    total_platform_fees = db.session.query(func.sum(Payment.platform_fee)).filter(Payment.status == 'Completed').scalar() or 0
-    total_payment_count = db.session.query(func.count(Payment.id)).filter(Payment.status == 'Completed').scalar() or 0
+    # Get pending users (both sponsors and influencers)
+    pending_users = User.query.filter(
+        or_(
+            and_(User.role == 'sponsor', User.sponsor_approved == None),
+            and_(User.role == 'influencer', User.influencer_approved == None)
+        )
+    ).all()
     
-    # Get recent fees (last 30 days)
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-    recent_fees = db.session.query(func.sum(Payment.platform_fee)).filter(
-        Payment.status == 'Completed',
-        Payment.created_at >= thirty_days_ago
-    ).scalar() or 0
-
-    return jsonify({
-        'total_users': total_users, 
-        'active_sponsors': active_sponsors, 
-        'pending_sponsors': pending_sponsors,
-        'active_influencers': active_influencers, 
-        'pending_influencers': pending_influencers,
-        'public_campaigns': public_campaigns, 
-        'private_campaigns': private_campaigns,
-        'flagged_users': flagged_users, 
-        'flagged_campaigns': flagged_campaigns,
-        'ad_requests_by_status': dict(ad_request_stats),
-        'payment_stats': {
-            'total_payments': round(total_payments, 2),
-            'total_payments_formatted': format_currency(total_payments),
-            'total_platform_fees': round(total_platform_fees, 2),
-            'total_platform_fees_formatted': format_currency(total_platform_fees),
-            'total_payment_count': total_payment_count,
-            'recent_fees': round(recent_fees, 2),
-            'recent_fees_formatted': format_currency(recent_fees),
-            'currency_symbol': CURRENCY_SYMBOL
+    # Simple data collection for pending users
+    pending_users_data = []
+    for user in pending_users[:5]:  # Limit to 5 users for the dashboard
+        user_data = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role,
+            'created_at': format_datetime(user.created_at),
+            'company_name': user.company_name if user.role == 'sponsor' else None,
+            'influencer_name': user.influencer_name if user.role == 'influencer' else None
         }
+        pending_users_data.append(user_data)
+    
+    return jsonify({
+        'total_users': total_users,
+        'active_sponsors': active_sponsors,
+        'pending_sponsors': pending_sponsors,
+        'active_influencers': active_influencers,
+        'pending_influencers': pending_influencers,
+        'public_campaigns': public_campaigns,
+        'private_campaigns': private_campaigns,
+        'ad_requests_by_status': ad_requests_by_status,
+        'flagged_users': flagged_users,
+        'flagged_campaigns': flagged_campaigns,
+        'pending_users': pending_users_data  # Include recent pending users data
     }), 200
 
 @app.route('/api/admin/pending_sponsors', methods=['GET'])
 @jwt_required()
 @admin_required
+@cache.cached(timeout=15)  # Cache for 15 seconds to ensure fresh data
 def admin_get_pending_sponsors():
-    pending = User.query.filter_by(role='sponsor', sponsor_approved=False, is_active=True).all()
+    pending = User.query.filter_by(role='sponsor', sponsor_approved=None, is_active=True).all()
     return jsonify([serialize_user_profile(user) for user in pending]), 200
 
 @app.route('/api/admin/pending_influencers', methods=['GET'])
 @jwt_required()
 @admin_required
+@cache.cached(timeout=15)  # Cache for 15 seconds to ensure fresh data
 def admin_get_pending_influencers():
-    pending = User.query.filter_by(role='influencer', influencer_approved=False, is_active=True).all()
+    pending = User.query.filter_by(role='influencer', influencer_approved=None, is_active=True).all()
     return jsonify([serialize_user_profile(user) for user in pending]), 200
 
 @app.route('/api/admin/pending_users', methods=['GET'])
 @jwt_required()
 @admin_required
+@cache.cached(timeout=15)  # Cache for 15 seconds to ensure fresh data
 def admin_get_pending_users():
     """Get all pending users (both sponsors and influencers)"""
-    pending_sponsors = User.query.filter_by(role='sponsor', sponsor_approved=False, is_active=True).all()
-    pending_influencers = User.query.filter_by(role='influencer', influencer_approved=False, is_active=True).all()
+    pending_sponsors = User.query.filter_by(role='sponsor', sponsor_approved=None, is_active=True).all()
+    pending_influencers = User.query.filter_by(role='influencer', influencer_approved=None, is_active=True).all()
     
     all_pending = pending_sponsors + pending_influencers
     return jsonify([serialize_user_profile(user) for user in all_pending]), 200
@@ -972,56 +999,99 @@ def sponsor_delete_campaign(campaign_id):
 @jwt_required()
 @sponsor_required
 def sponsor_create_ad_request(campaign_id):
-    sponsor_id = get_jwt_identity()
-    campaign = Campaign.query.filter_by(id=campaign_id, sponsor_id=sponsor_id).first()
-    if not campaign: return jsonify({"message": "Campaign not found/denied"}), 404
+    try:
+        sponsor_id = get_jwt_identity()
+        
+        # Check if the campaign exists and belongs to the sponsor
+        campaign = Campaign.query.filter_by(id=campaign_id, sponsor_id=sponsor_id).first()
+        if not campaign: 
+            return jsonify({"message": "Campaign not found/denied"}), 404
 
-    data = request.get_json()
-    required = ['influencer_id', 'requirements', 'payment_amount']
-    if not all(f in data for f in required): return jsonify({"message": "Missing fields"}), 400
-    influencer = User.query.filter_by(id=data['influencer_id'], role='influencer', is_active=True).first()
-    if not influencer: return jsonify({"message": "Active influencer not found"}), 404
-    try: payment = float(data['payment_amount'])
-    except (ValueError, TypeError): return jsonify({"message": "Invalid payment amount"}), 400
+        # Get and validate request data
+        data = request.get_json()
+        if not data:
+            return jsonify({"message": "No JSON data received"}), 400
+            
+        # Check required fields
+        required = ['influencer_id', 'requirements', 'payment_amount']
+        missing = [f for f in required if f not in data]
+        if missing:
+            return jsonify({"message": f"Missing required fields: {', '.join(missing)}"}), 400
+        
+        # Validate influencer ID is an integer
+        try:
+            influencer_id = int(data['influencer_id'])
+        except (ValueError, TypeError):
+            return jsonify({"message": "Invalid influencer ID format"}), 400
+        
+        # Check for approved and non-flagged influencers only
+        influencer = User.query.filter_by(
+            id=influencer_id, 
+            role='influencer', 
+            is_active=True,
+            influencer_approved=True,
+            is_flagged=False
+        ).first()
+        
+        if not influencer: 
+            return jsonify({"message": "Influencer not found or not available. The influencer may be pending approval or flagged for policy violations."}), 404
+        
+        # Validate payment amount
+        try: 
+            payment = float(data['payment_amount'])
+            if payment <= 0:
+                return jsonify({"message": "Payment amount must be greater than zero"}), 400
+        except (ValueError, TypeError): 
+            return jsonify({"message": "Invalid payment amount - must be a valid number"}), 400
 
-    # Check if any request already exists for this influencer on this campaign (regardless of status)
-    existing_request = AdRequest.query.filter_by(
-        campaign_id=campaign.id,
-        influencer_id=influencer.id
-    ).first()
-    if existing_request:
-        status_msg = f"An ad request already exists for this influencer on this campaign (status: {existing_request.status})"
-        return jsonify({"message": status_msg, "ad_request_id": existing_request.id}), 409
+        # Check if any request already exists for this influencer on this campaign (regardless of status)
+        existing_request = AdRequest.query.filter_by(
+            campaign_id=campaign.id,
+            influencer_id=influencer.id
+        ).first()
+        
+        if existing_request:
+            status_msg = f"An ad request already exists for this influencer on this campaign (status: {existing_request.status})"
+            return jsonify({"message": status_msg, "ad_request_id": existing_request.id}), 409
 
-    ad_request = AdRequest(
-        campaign_id=campaign.id, influencer_id=influencer.id, initiator_id=sponsor_id, last_offer_by='sponsor',
-        message=data.get('message'), requirements=data['requirements'], payment_amount=payment, status='Pending'
-    )
-    db.session.add(ad_request)
-    db.session.flush()  # Get the ad_request ID before committing
-    
-    # Create initial history record
-    history = NegotiationHistory(
-        ad_request_id=ad_request.id,
-        user_id=sponsor_id,
-        user_role='sponsor',
-        action='propose',
-        message=data.get('message'),
-        payment_amount=payment,
-        requirements=data['requirements']
-    )
-    db.session.add(history)
-    
-    db.session.commit()
-    
-    # Schedule notification email task for new ad request
-    from task import send_test_email
-    send_test_email.delay(influencer.email)
-    
-    return jsonify({
-        "message": "Ad request created successfully",
-        "ad_request": serialize_ad_request_detail(ad_request)
-    }), 201
+        # Create the ad request
+        ad_request = AdRequest(
+            campaign_id=campaign.id, 
+            influencer_id=influencer.id, 
+            initiator_id=sponsor_id, 
+            last_offer_by='sponsor',
+            message=data.get('message', ''), 
+            requirements=data['requirements'], 
+            payment_amount=payment, 
+            status='Pending'
+        )
+        
+        db.session.add(ad_request)
+        db.session.flush()  # Get the ad_request ID before committing
+        
+        # Create initial history record
+        history = NegotiationHistory(
+            ad_request_id=ad_request.id,
+            user_id=sponsor_id,
+            user_role='sponsor',
+            action='propose',
+            message=data.get('message', ''),
+            payment_amount=payment,
+            requirements=data['requirements']
+        )
+        
+        db.session.add(history)
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Ad request sent successfully", 
+            "ad_request": serialize_ad_request_detail(ad_request)
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error in sponsor_create_ad_request: {str(e)}")
+        return jsonify({"message": f"An error occurred while processing your request: {str(e)}"}), 500
 
 @app.route('/api/sponsor/ad_requests', methods=['GET']) # Get all ad requests initiated by sponsor
 @jwt_required()
@@ -1426,7 +1496,12 @@ def influencer_apply_campaign(campaign_id):
 @app.route('/api/search/influencers', methods=['GET'])
 @jwt_required() # Any logged-in user can search
 def search_influencers():
-    query = User.query.filter_by(role='influencer', is_active=True, is_flagged=False) # Exclude flagged
+    query = User.query.filter_by(
+        role='influencer', 
+        is_active=True, 
+        is_flagged=False,
+        influencer_approved=True  # Only return approved influencers
+    ) 
     
     # Text search
     if search_query := request.args.get('query'):
@@ -1848,6 +1923,10 @@ def chart_dashboard_summary():
     public_campaigns = Campaign.query.filter_by(visibility='public').count()
     private_campaigns = Campaign.query.filter_by(visibility='private').count()
     
+    # Calculate average campaign budget
+    avg_budget_result = db.session.query(func.avg(Campaign.budget)).scalar()
+    avg_campaign_budget = int(avg_budget_result) if avg_budget_result else 0
+    
     # Get ad request stats
     total_requests = AdRequest.query.count()
     accepted_requests = AdRequest.query.filter_by(status='Accepted').count()
@@ -1897,6 +1976,7 @@ def chart_dashboard_summary():
             'value': 0,  # Default value
             'label': 'Acceptance Rate'
         },
+        'avgCampaignBudget': avg_campaign_budget,
         'currencySymbol': CURRENCY_SYMBOL,
         'timezoneName': 'IST (UTC+5:30)'
     }
@@ -2884,3 +2964,54 @@ def chart_campaign_distribution():
     }
     
     return jsonify(chart_data), 200
+
+# Add a dedicated endpoint for real-time dashboard data
+@app.route('/api/admin/dashboard/realtime', methods=['GET'])
+@jwt_required()
+@admin_required
+def admin_realtime_dashboard():
+    """Get real-time dashboard data (not cached)"""
+    # Pending approval counts
+    pending_sponsors_count = User.query.filter_by(role='sponsor', sponsor_approved=None, is_active=True).count()
+    pending_influencers_count = User.query.filter_by(role='influencer', influencer_approved=None, is_active=True).count()
+    
+    # Get most recent pending users (limit to 5)
+    recent_pending_sponsors = User.query.filter_by(
+        role='sponsor', sponsor_approved=None, is_active=True
+    ).order_by(User.created_at.desc()).limit(5).all()
+    
+    recent_pending_influencers = User.query.filter_by(
+        role='influencer', influencer_approved=None, is_active=True
+    ).order_by(User.created_at.desc()).limit(5).all()
+    
+    # Recent activity
+    recent_campaigns = Campaign.query.order_by(Campaign.created_at.desc()).limit(5).all()
+    recent_ad_requests = AdRequest.query.order_by(AdRequest.created_at.desc()).limit(5).all()
+    
+    # Today's stats
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    campaigns_today = Campaign.query.filter(Campaign.created_at >= today_start).count()
+    ad_requests_today = AdRequest.query.filter(AdRequest.created_at >= today_start).count()
+    users_today = User.query.filter(User.created_at >= today_start).count()
+    
+    return jsonify({
+        'pending_counts': {
+            'sponsors': pending_sponsors_count,
+            'influencers': pending_influencers_count,
+            'total': pending_sponsors_count + pending_influencers_count
+        },
+        'recent_pending': {
+            'sponsors': [serialize_user_profile(user) for user in recent_pending_sponsors],
+            'influencers': [serialize_user_profile(user) for user in recent_pending_influencers]
+        },
+        'today_stats': {
+            'campaigns': campaigns_today,
+            'ad_requests': ad_requests_today,
+            'new_users': users_today
+        },
+        'recent_activity': {
+            'campaigns': [serialize_campaign_basic(c) for c in recent_campaigns],
+            'ad_requests': [serialize_ad_request_detail(ar) for ar in recent_ad_requests]
+        },
+        'timestamp': datetime.utcnow().isoformat()
+    }), 200

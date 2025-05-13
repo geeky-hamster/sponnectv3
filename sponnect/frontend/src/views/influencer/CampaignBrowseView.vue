@@ -112,57 +112,14 @@ const loadCampaigns = async () => {
     error.value = ''
     
     console.log('Loading campaigns for influencer...');
-    const response = await influencerService.getAvailableCampaigns()
     
-    // Handle different response formats
-    if (response.data && Array.isArray(response.data)) {
-      // Direct array format
-      campaigns.value = response.data
-      console.log(`Loaded ${response.data.length} campaigns (array format)`);
-    } else if (response.data && Array.isArray(response.data.campaigns)) {
-      // Object with campaigns field
-      campaigns.value = response.data.campaigns
-      console.log(`Loaded ${response.data.campaigns.length} campaigns (object.campaigns format)`);
-    } else {
-      console.error('Unexpected response format:', response.data)
-      campaigns.value = []
-      error.value = 'Error: Received unexpected data format from server'
-    }
+    // Use searchCampaigns instead of influencerService.getAvailableCampaigns
+    // searchCampaigns already has the proper API call with error handling
+    await searchCampaigns();
     
-    // Log the first few campaigns for debugging
-    if (campaigns.value.length > 0) {
-      console.log('First campaign data:', JSON.stringify(campaigns.value[0], null, 2));
-      
-      // Verify all required fields are present
-      let missingFields = [];
-      campaigns.value.forEach((campaign, index) => {
-        if (!campaign.name) missingFields.push(`Campaign ${index} missing name`);
-        if (!campaign.description) missingFields.push(`Campaign ${index} missing description`);
-        if (campaign.budget === undefined) missingFields.push(`Campaign ${index} missing budget`);
-        
-        // Ensure dates are properly formatted
-        if (campaign.start_date && campaign.start_date.includes('NaN')) {
-          console.error(`Invalid start_date in campaign ${index}:`, campaign.start_date);
-          // Use ISO date if available
-          if (campaign.start_date_iso) {
-            campaign.start_date = formatDate(campaign.start_date_iso);
-          }
-        }
-        
-        if (campaign.end_date && campaign.end_date.includes('NaN')) {
-          console.error(`Invalid end_date in campaign ${index}:`, campaign.end_date);
-          // Use ISO date if available
-          if (campaign.end_date_iso) {
-            campaign.end_date = formatDate(campaign.end_date_iso);
-          }
-        }
-      });
-      
-      if (missingFields.length > 0) {
-        console.warn('Missing campaign fields:', missingFields);
-      }
-    } else {
-      console.log('No campaigns returned');
+    // Don't need the code below since searchCampaigns does all the work
+    // but we'll leave error.value assignment if no campaigns found
+    if (campaigns.value.length === 0) {
       error.value = 'No active campaigns found. Please check back later.';
     }
     
@@ -177,6 +134,7 @@ const loadCampaigns = async () => {
   } catch (err) {
     console.error('Failed to load campaigns:', err)
     error.value = 'Failed to load available campaigns. Please try again later.'
+    campaigns.value = []
   } finally {
     loading.value = false
   }
@@ -198,7 +156,10 @@ const searchCampaigns = async () => {
     });
     
     // Prepare search parameters - only include non-empty values
-    const searchParams = {};
+    const searchParams = {
+      // Add a timestamp to prevent caching issues
+      _t: Date.now()
+    };
     
     // Only add parameters that have valid values
     if (filters.search && filters.search.trim()) {
@@ -240,8 +201,10 @@ const searchCampaigns = async () => {
       }
     }
     
-    console.log('Calling API with search params:', searchParams);
+    console.log('Calling search API with params:', searchParams);
     
+    // IMPORTANT: Using searchService.searchCampaigns is the correct approach
+    // rather than influencerService.getAvailableCampaigns
     const response = await searchService.searchCampaigns(searchParams);
     console.log('Search API response received:', response);
     
@@ -283,15 +246,8 @@ const searchCampaigns = async () => {
       error.value = 'No campaigns found matching your criteria. Try adjusting your filters.';
     } else {
       console.log(`Successfully found ${campaignData.length} matching campaigns`);
-      // Log first campaign for debugging
-      if (campaignData.length > 0) {
-        console.log('First campaign sample:', {
-          id: campaignData[0].id,
-          name: campaignData[0].name,
-          category: campaignData[0].category,
-          budget: campaignData[0].budget
-        });
-      }
+      successMessage.value = `Loaded ${campaignData.length} campaigns`;
+      setTimeout(() => { successMessage.value = ''; }, 3000); // Auto-clear success message after 3 seconds
     }
   } catch (err) {
     console.error('Failed to search campaigns:', err);
@@ -466,6 +422,20 @@ watch(() => filters.search, (newValue) => {
   }
 })
 
+// Watch for route changes to refresh campaigns
+watch(
+  () => route.fullPath,
+  () => {
+    // Reset any existing error when route changes
+    error.value = '';
+    // If we're on the campaign browse page without a specific ID, load all campaigns
+    if (route.name === 'campaigns-browse' && !route.params.id) {
+      console.log('Route change detected - refreshing campaigns');
+      loadCampaigns();
+    }
+  }
+)
+
 // Load data on component mount
 onMounted(() => {
   loadCampaigns()
@@ -476,6 +446,26 @@ const getCategoryName = (categoryId) => {
   const category = categories.find(c => c.id === categoryId)
   return category ? category.name : categoryId
 }
+
+// Debugging functionality
+const refreshCampaigns = () => {
+  loadCampaigns()
+}
+
+const showDebugInfo = ref(false)
+const toggleDebugInfo = () => {
+  showDebugInfo.value = !showDebugInfo.value
+}
+
+// Add a computed property for determining dev mode
+const isDevelopmentMode = computed(() => {
+  // In a safe way, determine if we're in development mode
+  try {
+    return import.meta.env.DEV === true
+  } catch (e) {
+    return false
+  }
+})
 </script>
 
 <template>
@@ -492,6 +482,36 @@ const getCategoryName = (categoryId) => {
         </nav>
       </div>
       
+      <!-- Error Alert with more details -->
+      <div v-if="error" class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+        <strong>Error:</strong> <span v-html="error"></span>
+        <button @click="refreshCampaigns" class="btn btn-sm btn-outline-light ms-2">Try Again</button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      
+      <!-- Debug toolbar - Only visible in development mode -->
+      <div v-if="isDevelopmentMode" class="card mb-4 bg-light">
+        <div class="card-body">
+          <h5 class="card-title">Debug Tools</h5>
+          <div class="d-flex">
+            <button @click="refreshCampaigns" class="btn btn-sm btn-primary me-2">
+              <i class="bi bi-arrow-clockwise me-1"></i> Manual Refresh
+            </button>
+            <button @click="toggleDebugInfo" class="btn btn-sm btn-secondary me-2">
+              {{ showDebugInfo ? 'Hide' : 'Show' }} Debug Info
+            </button>
+            <span v-if="campaigns.length" class="badge bg-success ms-auto align-self-center">
+              {{ campaigns.length }} campaigns loaded
+            </span>
+          </div>
+          
+          <div v-if="showDebugInfo" class="mt-3">
+            <small class="text-muted">Last refresh: {{ new Date().toLocaleTimeString() }}</small>
+            <pre class="mt-2 bg-dark text-light p-2" style="max-height: 200px; overflow: auto;">{{ JSON.stringify({filters, campaignsCount: campaigns.length}, null, 2) }}</pre>
+          </div>
+        </div>
+      </div>
+      
       <!-- Breadcrumbs navigation for campaign detail view -->
       <nav v-if="selectedCampaignId" aria-label="breadcrumb" class="mb-4">
         <ol class="breadcrumb">
@@ -500,12 +520,6 @@ const getCategoryName = (categoryId) => {
           <li class="breadcrumb-item active">Campaign Details</li>
         </ol>
       </nav>
-      
-      <!-- Error Alert -->
-      <div v-if="error" class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-        <span v-html="error"></span>
-        <button type="button" class="btn-close" @click="error = ''"></button>
-      </div>
       
       <!-- Success Alert -->
       <div v-if="successMessage" class="alert alert-success alert-dismissible fade show mb-4" role="alert">

@@ -13,7 +13,17 @@ export const sponsorService = {
   // Campaign management
   getCampaigns: () => apiService.get('/api/sponsor/campaigns'),
   getCampaign: (id) => apiService.get(`/api/sponsor/campaigns/${id}`),
-  createCampaign: (campaignData) => apiService.post('/api/sponsor/campaigns', campaignData),
+  createCampaign: (data) => {
+    return apiService.post('/api/sponsor/campaigns', data)
+      .then(response => {
+        console.log("Campaign created successfully:", response.data);
+        return response;
+      })
+      .catch(error => {
+        console.error("Error creating campaign:", error);
+        throw error;
+      });
+  },
   updateCampaign: (id, campaignData) => apiService.put(`/api/sponsor/campaigns/${id}`, campaignData),
   deleteCampaign: (id) => apiService.delete(`/api/sponsor/campaigns/${id}`),
   completeCampaign: (id) => apiService.patch(`/api/sponsor/campaigns/${id}/complete`),
@@ -21,7 +31,35 @@ export const sponsorService = {
   // Ad request management
   getAdRequests: (params) => apiService.get('/api/sponsor/ad_requests', { params }),
   getAdRequest: (id) => apiService.get(`/api/sponsor/ad_requests/${id}`),
-  createAdRequest: (campaignId, requestData) => apiService.post(`/api/sponsor/campaigns/${campaignId}/ad_requests`, requestData),
+  createAdRequest: (campaignId, data) => {
+    console.log(`Creating ad request for campaign ${campaignId} with data:`, data);
+    return apiService.post(`/api/sponsor/campaigns/${campaignId}/ad_requests`, data)
+      .then(response => {
+        console.log("Ad request created successfully:", response.data);
+        return response;
+      })
+      .catch(error => {
+        // Enhance error logging to help with debugging
+        console.error("Failed to create ad request:", error);
+        
+        // Add more details if available
+        if (error.response) {
+          console.error("Error response data:", error.response.data);
+          console.error("Error response status:", error.response.status);
+          
+          // Special handling for common errors
+          if (error.response.status === 404) {
+            throw new Error("Influencer or campaign not found. The influencer may not be approved.");
+          } else if (error.response.status === 409) {
+            throw new Error(error.response.data.message || "An ad request already exists for this influencer");
+          } else if (error.response.status === 500) {
+            throw new Error("Server error. Please try again later or contact support.");
+          }
+        }
+        
+        throw error;
+      });
+  },
   negotiateAdRequest: (requestId, data) => apiService.put(`/api/sponsor/ad_requests/${requestId}`, data),
   deleteAdRequest: (requestId) => apiService.delete(`/api/sponsor/ad_requests/${requestId}`),
   
@@ -106,45 +144,10 @@ export const influencerService = {
   // Campaign applications
   getAvailableCampaigns: (params) => {
     console.log("Getting available campaigns with params:", params);
-    return apiService.get('/api/search/campaigns', { params })
-      .then(response => {
-        console.log("Available campaigns response:", response.data);
-        
-        // Handle different response formats
-        let campaigns = [];
-        
-        if (Array.isArray(response.data)) {
-          campaigns = response.data;
-        } else if (response.data && Array.isArray(response.data.campaigns)) {
-          campaigns = response.data.campaigns;
-        } else if (response.data && typeof response.data === 'object') {
-          // Handle case where data might be a single campaign object
-          campaigns = [response.data];
-        } else {
-          console.error("Unexpected campaigns data format:", response.data);
-          campaigns = [];
-        }
-        
-        // Validate and sanitize each campaign
-        const sanitizedCampaigns = campaigns.map(campaign => {
-          // Create a new object with default values
-          return {
-            id: campaign.id || 0,
-            name: campaign.name || "Unnamed Campaign",
-            description: campaign.description || "",
-            budget: campaign.budget || 0,
-            start_date: isValidDate(campaign.start_date) ? campaign.start_date : null,
-            end_date: isValidDate(campaign.end_date) ? campaign.end_date : null,
-            ...campaign
-          };
-        });
-        
-        return { data: sanitizedCampaigns };
-      })
-      .catch(error => {
-        console.error("Error fetching available campaigns:", error);
-        throw error;
-      });
+    
+    // Just use searchService's searchCampaigns since it already has proper error handling
+    // and data normalization. This ensures all campaign fetching uses the same path.
+    return searchService.searchCampaigns(params);
   },
   
   applyCampaign: (data) => {
@@ -295,44 +298,81 @@ export const searchService = {
       if (params.limit && !isNaN(parseInt(params.limit))) {
         cleanParams.limit = parseInt(params.limit);
       }
+      
+      // Timestamp to prevent caching
+      if (params._t) {
+        cleanParams._t = params._t;
+      } else {
+        cleanParams._t = Date.now(); // Always add a timestamp to prevent caching
+      }
     }
+    
+    // Log the actual parameters being sent
+    console.log('Final search campaigns params:', cleanParams);
     
     return apiService.get('/api/search/campaigns', { params: cleanParams })
       .then(response => {
         console.log('Search campaigns API response:', response);
         
         // Validate and normalize the response
-        if (!response.data) {
+        if (!response || !response.data) {
           console.warn('Empty data received from search campaigns API');
           return { data: [] };
         }
         
         // Process the response to handle different formats
         let campaigns = [];
+        let pagination = null;
         
         if (Array.isArray(response.data)) {
+          console.log('Response is an array of campaigns');
           campaigns = response.data;
         } else if (response.data.campaigns && Array.isArray(response.data.campaigns)) {
+          console.log('Response has campaigns array inside object');
           campaigns = response.data.campaigns;
           
           // If pagination info exists, preserve it
           if (response.data.pagination) {
-            return {
-              data: {
-                campaigns: campaigns,
-                pagination: response.data.pagination
-              }
-            };
+            pagination = response.data.pagination;
           }
         } else if (typeof response.data === 'object' && !Array.isArray(response.data) && response.data.id) {
           // Single campaign object
+          console.log('Response is a single campaign object');
           campaigns = [response.data];
+        } else {
+          console.error('Unknown response format:', response.data);
+          return { data: [] };
         }
         
-        return { data: campaigns };
+        // Ensure all campaigns have required fields
+        campaigns = campaigns.map(campaign => ({
+          ...campaign,
+          id: campaign.id || 0,
+          name: campaign.name || 'Unnamed Campaign',
+          description: campaign.description || 'No description provided',
+          budget: campaign.budget || 0
+        }));
+        
+        console.log(`Processed ${campaigns.length} campaigns successfully`);
+        
+        // Return with standard format
+        if (pagination) {
+          return { data: { campaigns, pagination } };
+        } else {
+          return { data: campaigns };
+        }
       })
       .catch(error => {
         console.error('Error in searchCampaigns:', error);
+        // Provide more detailed error logging
+        if (error.response) {
+          console.error('Error response status:', error.response.status);
+          console.error('Error response data:', error.response.data);
+        } else if (error.request) {
+          console.error('No response received from request');
+        } else {
+          console.error('Error setting up request:', error.message);
+        }
         throw error;
       });
   }

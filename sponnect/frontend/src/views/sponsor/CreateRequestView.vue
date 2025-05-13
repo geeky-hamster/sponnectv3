@@ -190,22 +190,59 @@ const handleSubmit = async () => {
       message: form.value.message
     }
     
-    await sponsorService.createAdRequest(campaignId.value, requestData)
+    console.log(`Submitting ad request for campaign ${campaignId.value} to influencer ${requestData.influencer_id}`)
+    
+    // Add debug information to help trace issues
+    const selectedInfluencerData = selectedInfluencer.value || {}
+    console.log('Selected influencer data:', 
+      { 
+        id: selectedInfluencerData.id,
+        name: selectedInfluencerData.influencer_name,
+        approved: selectedInfluencerData.influencer_approved,
+        active: selectedInfluencerData.is_active
+      }
+    )
+    
+    const response = await sponsorService.createAdRequest(campaignId.value, requestData)
+    console.log('Ad request created successfully:', response.data)
     
     // Redirect to campaign details page
     router.push(`/sponsor/campaigns/${campaignId.value}?tab=requests`)
   } catch (err) {
     console.error('Failed to create ad request:', err)
     
-    // Handle duplicate ad request case (409 Conflict)
-    if (err.response && err.response.status === 409) {
-      const adRequestId = err.response.data.ad_request_id
+    // Handle specific error cases
+    if (err.response) {
+      const statusCode = err.response.status
+      const responseData = err.response.data
       
-      if (adRequestId) {
-        error.value = `${err.response.data.message}. <a href="/sponsor/ad-requests/${adRequestId}" class="alert-link">View existing request</a>` 
-      } else {
-        error.value = err.response.data.message || 'A request for this influencer already exists'
+      console.log(`Server response: ${statusCode}`, responseData)
+      
+      // Handle duplicate ad request case (409 Conflict)
+      if (statusCode === 409) {
+        const adRequestId = responseData.ad_request_id
+        
+        if (adRequestId) {
+          error.value = `${responseData.message}. <a href="/sponsor/ad-requests/${adRequestId}" class="alert-link">View existing request</a>` 
+        } else {
+          error.value = responseData.message || 'A request for this influencer already exists'
+        }
+      } 
+      // Handle influencer not found/approved issues
+      else if (statusCode === 404) {
+        error.value = responseData.message || 'The selected influencer is not available. They may be pending approval or inactive.'
       }
+      // Handle server errors
+      else if (statusCode === 500) {
+        error.value = responseData.message || 'A server error occurred. Please try again later or contact support.'
+      }
+      // Handle any other error
+      else {
+        error.value = responseData.message || `Error ${statusCode}: Failed to create ad request`
+      }
+    } else if (err.message) {
+      // Handle client-side errors or custom error messages
+      error.value = err.message
     } else {
       error.value = 'Failed to create ad request. Please check your inputs and try again.'
     }
@@ -237,6 +274,11 @@ watch(searchQuery, () => {
 onMounted(() => {
   loadData()
 })
+
+// New function to select an influencer
+const selectInfluencer = (influencer) => {
+  form.value.influencer_id = influencer.id.toString()
+}
 </script>
 
 <template>
@@ -371,79 +413,42 @@ onMounted(() => {
                     </div>
                   </div>
                   
-                  <div v-if="searching" class="text-center py-3">
-                    <div class="spinner-border spinner-border-sm text-primary" role="status">
-                      <span class="visually-hidden">Searching...</span>
-                    </div>
-                    <span class="ms-2">Searching for influencers...</span>
-                  </div>
-                  
-                  <!-- Selected Influencer Preview -->
-                  <div v-if="selectedInfluencer" class="alert alert-success mb-4">
-                    <div class="d-flex justify-content-between align-items-center">
-                      <div>
-                        <h5 class="alert-heading mb-1">
-                          <i class="bi bi-check-circle-fill me-2"></i>
-                          Selected Influencer
-                        </h5>
-                        <p class="mb-0">
-                          <strong>{{ selectedInfluencer.influencer_name }}</strong> -
-                          {{ selectedInfluencer.category }} • {{ selectedInfluencer.niche || 'General' }} •
-                          <span class="badge bg-primary">{{ selectedInfluencer.reach.toLocaleString('en-IN', ) }} followers</span>
-                        </p>
+                  <!-- Influencer search results -->
+                  <div class="list-group mb-3">
+                    <div v-if="searching" class="text-center p-3">
+                      <div class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">Searching...</span>
                       </div>
-                      <button 
-                        class="btn btn-sm btn-outline-danger" 
-                        @click="form.influencer_id = ''"
-                      >
-                        Change
-                      </button>
+                      <span class="ms-2">Searching for influencers...</span>
                     </div>
-                  </div>
-                  
-                  <!-- Search Results -->
-                  <div v-if="!selectedInfluencer && searchResults.length > 0" class="mb-4">
-                    <h6 class="form-label mb-3">
-                      <i class="bi bi-search me-1"></i> Search Results ({{ searchResults.length }})
-                    </h6>
                     
-                    <div class="row row-cols-1 row-cols-md-2 g-3">
-                      <div 
-                        v-for="influencer in searchResults" 
-                        :key="influencer.id"
-                        class="col"
-                      >
-                        <div 
-                          class="card h-100 border"
-                          :class="{ 'border-primary': form.influencer_id.toString() === influencer.id.toString() }"
-                          style="cursor: pointer;"
-                          @click="form.influencer_id = influencer.id.toString()"
-                        >
-                          <div class="card-body p-3">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                              <h6 class="card-title mb-0 fw-bold">{{ influencer.influencer_name }}</h6>
-                              <span class="badge bg-primary rounded-pill">{{ influencer.reach.toLocaleString('en-IN', ) }}</span>
-                            </div>
-                            <div class="mb-2">
-                              <span class="badge bg-light text-dark me-1">{{ influencer.category }}</span>
-                              <span v-if="influencer.niche" class="badge bg-light text-dark">{{ influencer.niche }}</span>
-                            </div>
-                            <div class="d-grid">
-                              <button 
-                                @click.stop="form.influencer_id = influencer.id.toString()" 
-                                class="btn btn-sm"
-                                :class="form.influencer_id.toString() === influencer.id.toString() ? 'btn-success' : 'btn-outline-primary'"
-                              >
-                                <i 
-                                  :class="form.influencer_id.toString() === influencer.id.toString() ? 'bi bi-check-circle-fill' : 'bi bi-person-plus-fill'"
-                                  class="me-1"
-                                ></i>
-                                {{ form.influencer_id.toString() === influencer.id.toString() ? 'Selected' : 'Select' }}
-                              </button>
-                            </div>
-                          </div>
+                    <div v-else-if="searchResults.length === 0 && searchQuery" class="alert alert-info">
+                      No influencers found matching your search criteria.
+                    </div>
+                    
+                    <div v-for="influencer in searchResults" :key="influencer.id" 
+                         class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                         :class="{'active': form.influencer_id === influencer.id.toString()}"
+                         @click="selectInfluencer(influencer)">
+                      <div>
+                        <div class="d-flex align-items-center">
+                          <strong class="me-2">{{ influencer.influencer_name || influencer.username }}</strong>
+                          <!-- Add status indicator to help sponsors verify that influencers are approved and active -->
+                          <span v-if="influencer.influencer_approved" class="badge bg-success me-2">
+                            <i class="bi bi-check-circle-fill me-1"></i>Verified
+                          </span>
                         </div>
+                        <small>
+                          {{ influencer.category }}
+                          <span v-if="influencer.niche">• {{ influencer.niche }}</span>
+                          <span v-if="influencer.reach">• {{ influencer.reach.toLocaleString() }} followers</span>
+                        </small>
                       </div>
+                      <button type="button" class="btn btn-sm" 
+                              :class="form.influencer_id === influencer.id.toString() ? 'btn-light' : 'btn-primary'"
+                              @click.stop="selectInfluencer(influencer)">
+                        {{ form.influencer_id === influencer.id.toString() ? 'Selected' : 'Select' }}
+                      </button>
                     </div>
                   </div>
                   

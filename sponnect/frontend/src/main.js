@@ -25,6 +25,24 @@ try {
   console.error('Error setting Indian locale:', e);
 }
 
+// Ensure Bootstrap's JavaScript is properly initialized
+document.addEventListener('DOMContentLoaded', () => {
+  // Initialize all dropdowns
+  if (typeof bootstrap !== 'undefined') {
+    // Initialize all tooltips
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+    
+    // Initialize all popovers
+    const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]');
+    [...popoverTriggerList].map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl));
+    
+    console.log('Bootstrap components initialized');
+  } else {
+    console.warn('Bootstrap JS not loaded properly');
+  }
+});
+
 const app = createApp(App)
 
 // Global error handler
@@ -43,5 +61,26 @@ app.config.globalProperties.$timezone = 'IST';
 
 app.use(createPinia())
 app.use(router)
+
+// Add a global mixin for app-wide dropdown initialization
+app.mixin({
+  mounted() {
+    // This will run on every component that's mounted
+    this.$nextTick(() => {
+      // Initialize dropdowns in this component
+      if (typeof bootstrap !== 'undefined') {
+        const dropdowns = this.$el.querySelectorAll('.dropdown-toggle');
+        if (dropdowns.length > 0) {
+          [...dropdowns].forEach(el => {
+            // Only initialize if not already initialized
+            if (!bootstrap.Dropdown.getInstance(el)) {
+              new bootstrap.Dropdown(el);
+            }
+          });
+        }
+      }
+    });
+  }
+})
 
 app.mount('#app')

@@ -126,7 +126,7 @@ const register = async () => {
     // Show success message
     success.value = formData.value.role === 'sponsor' 
       ? 'Registration successful! Your sponsor account is pending approval.'
-      : 'Registration successful! You can now log in to your influencer account.'
+      : 'Registration successful! Your influencer account is pending approval.'
     
     // Clear form
     Object.keys(formData.value).forEach(key => {
@@ -150,26 +150,27 @@ const register = async () => {
             <div class="card-body p-4 p-md-5">
               <h1 class="text-center mb-4">Create an Account</h1>
               
-              <div v-if="success" class="alert alert-success" role="alert">
+              <div v-if="success" class="alert alert-success shadow-sm" role="alert">
+                <i class="bi bi-check-circle-fill me-2"></i>
                 {{ success }}
-                <div class="mt-2">
-                  <router-link to="/login" class="btn btn-sm btn-success">Proceed to Login</router-link>
+                <div class="mt-3">
+                  <router-link to="/login" class="btn btn-success">Proceed to Login</router-link>
                 </div>
               </div>
               
               <form v-else @submit.prevent="register">
                 <!-- Role Selection -->
                 <div class="mb-4 text-center">
-                  <div class="btn-group" role="group">
+                  <div class="btn-group btn-group-lg w-75" role="group">
                     <input type="radio" class="btn-check" name="role" id="sponsor" value="sponsor"
                            v-model="formData.role" autocomplete="off">
-                    <label class="btn btn-outline-primary" for="sponsor">
+                    <label class="btn btn-outline-primary rounded-start" for="sponsor">
                       <i class="bi bi-briefcase me-2"></i>I'm a Sponsor
                     </label>
                     
                     <input type="radio" class="btn-check" name="role" id="influencer" value="influencer"
                            v-model="formData.role" autocomplete="off">
-                    <label class="btn btn-outline-primary" for="influencer">
+                    <label class="btn btn-outline-primary rounded-end" for="influencer">
                       <i class="bi bi-person-badge me-2"></i>I'm an Influencer
                     </label>
                   </div>
@@ -256,8 +257,8 @@ const register = async () => {
                     </div>
                   </div>
                   
-                  <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i> Note: Sponsor accounts require approval before activation.
+                  <div class="alert alert-info shadow-sm">
+                    <i class="bi bi-info-circle-fill me-2"></i> <strong>Important:</strong> Sponsor accounts require approval before activation.
                   </div>
                 </div>
                 
@@ -312,14 +313,19 @@ const register = async () => {
                       >
                     </div>
                   </div>
+                  
+                  <div class="alert alert-info shadow-sm">
+                    <i class="bi bi-info-circle-fill me-2"></i> <strong>Important:</strong> Influencer accounts require admin approval before activation. This helps maintain platform quality.
+                  </div>
                 </div>
                 
                 <div class="alert alert-danger mt-3" v-if="error">
+                  <i class="bi bi-exclamation-triangle-fill me-2"></i>
                   {{ error }}
                 </div>
                 
-                <div class="d-grid mt-4">
-                  <button type="submit" class="btn btn-primary py-2" :disabled="loading">
+                <div class="d-grid mt-4 mb-3">
+                  <button type="submit" class="btn btn-primary btn-lg py-2" :disabled="loading">
                     <span v-if="loading" class="spinner-border spinner-border-sm me-2" role="status"></span>
                     {{ loading ? 'Registering...' : 'Create Account' }}
                   </button>

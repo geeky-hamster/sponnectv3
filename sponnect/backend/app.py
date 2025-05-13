@@ -561,21 +561,23 @@ def get_public_influencer_profile(influencer_id):
 @app.route('/api/admin/stats', methods=['GET'])
 @jwt_required()
 @admin_required
-@cache.cached(timeout=30)  # Cache for 30 seconds to balance freshness and performance
-def get_admin_stats():
-    # Basic counts - can be expanded with date ranges, etc.
-    total_users = db.session.query(func.count(User.id)).scalar()
+@cache.cached(timeout=60)  # Cache for 60 seconds to balance freshness and performance
+def admin_dashboard_stats():
+    """Get dashboard stats for admin"""
+    # Get counts for different user types
+    total_users = User.query.count()
     active_sponsors = User.query.filter_by(role='sponsor', is_active=True, sponsor_approved=True).count()
     pending_sponsors = User.query.filter_by(role='sponsor', sponsor_approved=None).count()
     active_influencers = User.query.filter_by(role='influencer', is_active=True, influencer_approved=True).count()
     pending_influencers = User.query.filter_by(role='influencer', influencer_approved=None).count()
+    
+    # Get campaign counts
     public_campaigns = Campaign.query.filter_by(visibility='public').count()
     private_campaigns = Campaign.query.filter_by(visibility='private').count()
     
-    # Get ad requests by status
+    # Get ad request status counts
     ad_requests_by_status = {}
-    statuses = ['Pending', 'Accepted', 'Rejected', 'Negotiating']
-    for status in statuses:
+    for status in ['Pending', 'Accepted', 'Rejected', 'Negotiating']:
         count = AdRequest.query.filter_by(status=status).count()
         ad_requests_by_status[status] = count
     
@@ -1672,8 +1674,9 @@ def search_campaigns():
 @app.route('/api/charts/user-growth', methods=['GET'])
 @jwt_required()
 @admin_required
+@cache.cached(timeout=300, query_string=True)  # Cache for 5 minutes, vary by query parameters
 def chart_user_growth():
-    """Returns time-series data of user registrations for ChartJS"""
+    """Returns user growth chart data"""
     # Get time period from query params (default: last 6 months)
     months = int(request.args.get('months', 6))
     end_date = datetime.utcnow()
@@ -1737,8 +1740,9 @@ def chart_user_growth():
 @app.route('/api/charts/ad-request-status', methods=['GET'])
 @jwt_required()
 @admin_required
+@cache.cached(timeout=180)  # Cache for 3 minutes
 def chart_ad_request_status():
-    """Returns distribution of ad request statuses for ChartJS"""
+    """Returns ad request status distribution chart data"""
     # Get counts by status
     status_counts = db.session.query(
         AdRequest.status,
@@ -1776,8 +1780,9 @@ def chart_ad_request_status():
 @app.route('/api/charts/campaign-activity', methods=['GET'])
 @jwt_required()
 @admin_required
+@cache.cached(timeout=180, query_string=True)  # Cache for 3 minutes, vary by query parameters
 def chart_campaign_activity():
-    """Returns time-series data of campaign creation and ad requests for ChartJS"""
+    """Returns campaign and ad request activity over time"""
     # Get time period from query params (default: last 6 months)
     months = int(request.args.get('months', 6))
     end_date = datetime.utcnow()
@@ -1842,6 +1847,7 @@ def chart_campaign_activity():
 @app.route('/api/charts/conversion-rates', methods=['GET'])
 @jwt_required()
 @admin_required
+@cache.cached(timeout=300, query_string=True)  # Cache for 5 minutes, vary by query parameters
 def chart_conversion_rates():
     """Returns conversion rates from ad requests to accepted partnerships"""
     # Get time period from query params (default: last 6 months)
@@ -1910,6 +1916,7 @@ def chart_conversion_rates():
 @app.route('/api/charts/dashboard-summary', methods=['GET'])
 @jwt_required()
 @admin_required
+@cache.cached(timeout=120)  # Cache for 2 minutes
 def chart_dashboard_summary():
     """Returns summarized data for dashboard charts"""
     # Get stats for different user types
@@ -1947,17 +1954,20 @@ def chart_dashboard_summary():
                 ],
                 'backgroundColor': [
                     'rgba(75, 192, 192, 0.6)',
-                    'rgba(75, 192, 192, 0.2)',
                     'rgba(153, 102, 255, 0.6)',
-                    'rgba(153, 102, 255, 0.2)'
+                    'rgba(255, 159, 64, 0.6)',
+                    'rgba(255, 205, 86, 0.6)'
                 ]
             }]
         },
         'campaignVisibility': {
-            'labels': ['Public', 'Private'],
+            'labels': ['Public Campaigns', 'Private Campaigns'],
             'datasets': [{
                 'data': [public_campaigns, private_campaigns],
-                'backgroundColor': ['rgba(54, 162, 235, 0.6)', 'rgba(255, 99, 132, 0.6)']
+                'backgroundColor': [
+                    'rgba(54, 162, 235, 0.6)',
+                    'rgba(255, 99, 132, 0.6)'
+                ]
             }]
         },
         'adRequestStatus': {
@@ -2912,8 +2922,9 @@ def update_expired_campaigns():
 @app.route('/api/charts/campaign-distribution', methods=['GET'])
 @jwt_required()
 @admin_required
+@cache.cached(timeout=180)  # Cache for 3 minutes
 def chart_campaign_distribution():
-    """Returns distribution of campaigns by category for charts"""
+    """Returns campaign distribution chart data"""
     
     # Query to count campaigns by category
     category_counts = db.session.query(

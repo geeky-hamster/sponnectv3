@@ -13,6 +13,16 @@ const loading = ref(true)
 const chartLoading = ref(true)
 const error = ref('')
 const timeRange = ref('last_30_days')
+const lastRefreshTime = ref(null)
+
+// Add caching timestamps for data
+const statsCacheTime = ref(0)
+const chartDataCacheTime = ref({
+  userGrowth: 0,
+  campaignDistribution: 0,
+  adRequestStatus: 0,
+  campaignActivity: 0
+})
 
 // Add screen size tracking
 const isSmallScreen = ref(window.innerWidth < 576)
@@ -209,6 +219,12 @@ const getChartOptions = (chartType) => {
   }
 }
 
+// Calculate if data should be refreshed based on time elapsed
+const shouldRefreshData = (cacheTime, refreshInterval = 300000) => { // Default 5 minutes
+  if (!cacheTime) return true
+  return Date.now() - cacheTime > refreshInterval
+}
+
 // Computed properties
 const userGrowth = computed(() => {
   if (!stats.value?.users?.growth || !Array.isArray(stats.value.users.growth) || stats.value.users.growth.length < 2) return 0
@@ -232,18 +248,24 @@ const handleResize = () => {
 }
 
 // API calls
-const loadStats = async () => {
+const loadStats = async (forceRefresh = false) => {
   loading.value = true
   error.value = ''
   
   try {
-    // Load main statistics
-    const statsResponse = await adminService.getStats()
-    console.log('Stats API response:', statsResponse)
-    stats.value = statsResponse.data || {}
+    // Only fetch stats if cache is expired or force refresh is requested
+    if (forceRefresh || shouldRefreshData(statsCacheTime.value, 60000)) { // 1 minute for stats
+      const statsResponse = await adminService.getStats()
+      console.log('Stats API response:', statsResponse)
+      stats.value = statsResponse.data || {}
+      statsCacheTime.value = Date.now()
+    }
     
     // Load chart data
-    await loadChartData()
+    await loadChartData(forceRefresh)
+    
+    // Update last refresh time
+    lastRefreshTime.value = new Date().toLocaleTimeString()
   } catch (err) {
     console.error('Failed to load statistics:', err)
     error.value = 'Failed to load statistics. Please try again later.'
@@ -252,7 +274,7 @@ const loadStats = async () => {
   }
 }
 
-const loadChartData = async () => {
+const loadChartData = async (forceRefresh = false) => {
   chartLoading.value = true
   
   try {
@@ -263,92 +285,111 @@ const loadChartData = async () => {
       stats.value.users.growth = [];
     }
     
-    // Load user growth chart data
-    const userGrowthResponse = await adminService.getUserGrowthChart({ 
-      time_range: timeRange.value 
-    })
-    console.log('User Growth API response:', userGrowthResponse)
-    
-    if (userGrowthResponse.data) {
-      userGrowthChartData.value.labels = userGrowthResponse.data.labels || []
-      userGrowthChartData.value.datasets[0].data = userGrowthResponse.data.datasets?.[0]?.data || []
+    // Load user growth chart data (refresh every 5 minutes or when time range changes)
+    if (forceRefresh || shouldRefreshData(chartDataCacheTime.value.userGrowth, 300000)) {
+      const userGrowthResponse = await adminService.getUserGrowthChart({ 
+        time_range: timeRange.value 
+      })
+      console.log('User Growth API response:', userGrowthResponse)
       
-      // Update growth data for stats if available
-      if (userGrowthResponse.data.datasets?.[0]?.data && userGrowthResponse.data.labels) {
-        stats.value.users.growth = userGrowthResponse.data.labels.map((date, index) => ({
-          date: date,
-          count: userGrowthResponse.data.datasets[0].data[index] || 0
-        }))
+      if (userGrowthResponse.data) {
+        userGrowthChartData.value.labels = userGrowthResponse.data.labels || []
+        userGrowthChartData.value.datasets[0].data = userGrowthResponse.data.datasets?.[0]?.data || []
+        
+        // Update growth data for stats if available
+        if (userGrowthResponse.data.datasets?.[0]?.data && userGrowthResponse.data.labels) {
+          stats.value.users.growth = userGrowthResponse.data.labels.map((date, index) => ({
+            date: date,
+            count: userGrowthResponse.data.datasets[0].data[index] || 0
+          }))
+        }
+        
+        chartDataCacheTime.value.userGrowth = Date.now()
       }
     }
     
-    // Load campaign distribution chart data
-    const campaignDistResponse = await adminService.getCampaignDistributionChart()
-    console.log('Campaign Distribution API response:', campaignDistResponse)
-    
-    if (campaignDistResponse.data) {
-      // The backend returns data in the format {labels: [...], datasets: [{data: [...]}]}
-      campaignDistributionChartData.value.labels = campaignDistResponse.data.labels || []
-      campaignDistributionChartData.value.datasets[0].data = campaignDistResponse.data.datasets?.[0]?.data || []
+    // Load campaign distribution chart data (refresh every 3 minutes)
+    if (forceRefresh || shouldRefreshData(chartDataCacheTime.value.campaignDistribution, 180000)) {
+      const campaignDistResponse = await adminService.getCampaignDistributionChart()
+      console.log('Campaign Distribution API response:', campaignDistResponse)
+      
+      if (campaignDistResponse.data) {
+        // The backend returns data in the format {labels: [...], datasets: [{data: [...]}]}
+        campaignDistributionChartData.value.labels = campaignDistResponse.data.labels || []
+        campaignDistributionChartData.value.datasets[0].data = campaignDistResponse.data.datasets?.[0]?.data || []
+        
+        chartDataCacheTime.value.campaignDistribution = Date.now()
+      }
     }
     
-    // Load ad request status chart data
-    const adRequestStatusResponse = await adminService.getAdRequestStatusChart()
-    console.log('Ad Request Status API response:', adRequestStatusResponse)
-    
-    if (adRequestStatusResponse.data) {
-      // The backend returns data in the format {labels: [...], datasets: [{data: [...]}]}
-      adRequestStatusChartData.value.labels = adRequestStatusResponse.data.labels || []
-      adRequestStatusChartData.value.datasets[0].data = adRequestStatusResponse.data.datasets?.[0]?.data || []
+    // Load ad request status chart data (refresh every 3 minutes)
+    if (forceRefresh || shouldRefreshData(chartDataCacheTime.value.adRequestStatus, 180000)) {
+      const adRequestStatusResponse = await adminService.getAdRequestStatusChart()
+      console.log('Ad Request Status API response:', adRequestStatusResponse)
+      
+      if (adRequestStatusResponse.data) {
+        adRequestStatusChartData.value.labels = adRequestStatusResponse.data.labels || []
+        adRequestStatusChartData.value.datasets[0].data = adRequestStatusResponse.data.datasets?.[0]?.data || []
+        
+        chartDataCacheTime.value.adRequestStatus = Date.now()
+      }
     }
     
-    // Load campaign activity chart data
-    const campaignActivityResponse = await adminService.getCampaignActivityChart({
-      time_range: timeRange.value
-    })
-    console.log('Campaign Activity API response:', campaignActivityResponse)
-    
-    if (campaignActivityResponse.data) {
-      campaignActivityChartData.value.labels = campaignActivityResponse.data.labels || []
-      campaignActivityChartData.value.datasets[0].data = campaignActivityResponse.data.datasets?.[0]?.data || []
-      campaignActivityChartData.value.datasets[1].data = campaignActivityResponse.data.datasets?.[1]?.data || []
+    // Load campaign activity chart data (refresh every 3 minutes)
+    if (forceRefresh || shouldRefreshData(chartDataCacheTime.value.campaignActivity, 180000)) {
+      const campaignActivityResponse = await adminService.getCampaignActivityChart({ 
+        months: 6 
+      })
+      console.log('Campaign Activity API response:', campaignActivityResponse)
+      
+      if (campaignActivityResponse.data) {
+        campaignActivityChartData.value.labels = campaignActivityResponse.data.labels || []
+        campaignActivityChartData.value.datasets = campaignActivityResponse.data.datasets || []
+        
+        chartDataCacheTime.value.campaignActivity = Date.now()
+      }
     }
-    
   } catch (err) {
     console.error('Failed to load chart data:', err)
-    error.value = 'Failed to load chart data. Please try again later.'
   } finally {
     chartLoading.value = false
   }
 }
 
-// Format number with commas
-const formatNumber = (num) => {
-  return new Intl.NumberFormat().format(num || 0)
+// Handle refresh button click
+const refreshStats = () => {
+  loadStats(true) // Force refresh all data
 }
 
-// Format percentage
+// Watch for time range changes to reload user growth data
+watch(timeRange, () => {
+  // Reset only the user growth chart cache when time range changes
+  chartDataCacheTime.value.userGrowth = 0
+  loadChartData(false) // Not forcing full refresh, just the user growth chart
+})
+
+// Format percentages
 const formatPercentage = (value) => {
-  const numValue = Number(value) || 0
-  return `${numValue > 0 ? '+' : ''}${numValue.toFixed(1)}%`
+  return `${value.toFixed(1)}%`
 }
 
-// Setup and load data
+// Format numbers with commas
+const formatNumber = (num) => {
+  if (typeof num !== 'number') return '0'
+  return new Intl.NumberFormat('en-IN').format(num)
+}
+
 onMounted(() => {
   loadStats()
-  
-  // Add window resize event listener
   window.addEventListener('resize', handleResize)
-})
-
-// Clean up event listeners
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-})
-
-// Watch for time range changes
-watch(timeRange, () => {
-  loadStats()
+  
+  // Set up refresh interval - refresh every 5 minutes
+  const refreshInterval = setInterval(() => loadStats(false), 300000)
+  
+  onUnmounted(() => {
+    window.removeEventListener('resize', handleResize)
+    clearInterval(refreshInterval)
+  })
 })
 </script>
 
@@ -473,8 +514,49 @@ watch(timeRange, () => {
           </div>
         </div>
         
+        <!-- Controls Row -->
+        <div class="row mb-4">
+          <div class="col-12">
+            <div class="card border-0 content-card mb-4">
+              <div class="card-body py-3">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+                  <div class="d-flex align-items-center mb-3 mb-md-0">
+                    <label for="timeRangeSelect" class="me-2 mb-0">Time Range:</label>
+                    <select 
+                      id="timeRangeSelect" 
+                      v-model="timeRange" 
+                      class="form-select form-select-sm" 
+                      style="width: auto;"
+                    >
+                      <option value="last_7_days">Last 7 Days</option>
+                      <option value="last_30_days">Last 30 Days</option>
+                      <option value="last_90_days">Last 90 Days</option>
+                      <option value="last_year">Last Year</option>
+                    </select>
+                  </div>
+                  
+                  <div class="d-flex align-items-center">
+                    <span class="text-muted me-3" v-if="lastRefreshTime">
+                      <small><i class="bi bi-clock me-1"></i>Last updated: {{ lastRefreshTime }}</small>
+                    </span>
+                    <button 
+                      class="btn btn-sm btn-primary" 
+                      @click="refreshStats"
+                      :disabled="chartLoading"
+                    >
+                      <i class="bi bi-arrow-clockwise me-1"></i>
+                      <span v-if="!chartLoading">Refresh</span>
+                      <span v-else>Refreshing...</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <!-- Charts Row -->
-        <div class="row g-4 mb-4">
+        <div class="row g-4">
           <!-- User Growth Chart -->
           <div class="col-12 col-lg-6">
             <div class="card border-0 chart-card h-100">
@@ -484,14 +566,20 @@ watch(timeRange, () => {
               </div>
               <div class="card-body">
                 <div class="chart-container" style="min-height: 250px; height: 30vh;">
-                  <div v-if="userGrowthChartData.labels.length === 0" class="text-center text-muted py-5">
+                  <div v-if="chartLoading" class="text-center py-5">
+                    <div class="spinner-border text-primary spinner-border-sm" role="status">
+                      <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-muted small mt-2">Loading chart data...</p>
+                  </div>
+                  <div v-else-if="userGrowthChartData.labels.length === 0" class="text-center text-muted py-5">
                     <i class="bi bi-exclamation-circle fs-1"></i>
                     <p>No user growth data available for the selected period</p>
                   </div>
-                  <Line
+                  <Bar
                     v-else
                     :data="userGrowthChartData"
-                    :options="getChartOptions('line')"
+                    :options="getChartOptions('bar')"
                   />
                 </div>
               </div>

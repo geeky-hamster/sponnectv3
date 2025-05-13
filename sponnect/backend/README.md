@@ -104,4 +104,48 @@ API documentation is available at `/api/docs` when the server is running.
 ### Celery Worker Not Processing Tasks
 - Check if the worker is running with the correct app name
 - Look for error messages in the worker logs
-- Verify that Redis is accessible by the Celery worker 
+- Verify that Redis is accessible by the Celery worker
+
+## Caching System
+
+The application uses Redis-based caching to improve performance, particularly for the admin dashboard and statistics pages. Here's how the caching system works:
+
+### Backend Caching
+
+The backend uses Flask-Caching with Redis to cache API responses:
+
+- **Admin Dashboard Stats**: Cached for 60 seconds to balance data freshness with performance
+- **Dashboard Summary Charts**: Cached for 120 seconds (2 minutes)
+- **User Growth Charts**: Cached for 300 seconds (5 minutes), varies by query parameters
+- **Campaign Distribution**: Cached for 180 seconds (3 minutes)
+- **Ad Request Status**: Cached for 180 seconds (3 minutes)
+- **Campaign Activity**: Cached for 180 seconds (3 minutes), varies by query parameters
+- **Pending Users Lists**: Cached for 15 seconds to ensure quick approval updates
+
+### When to Use Caching
+
+The caching system is optimized for the following use cases:
+
+- **High Traffic Admin Pages**: The dashboard and statistics pages can handle higher traffic without overloading the database
+- **Complex Queries**: Charts and statistics that require complex database queries are cached
+- **Real-time Not Critical**: Data where real-time accuracy isn't mission-critical (trends, general statistics)
+
+### When Not to Use Caching
+
+Caching should not be used for:
+
+- **Critical State Changes**: User approvals, payments, or other state changes should bypass cache
+- **User-specific Data**: Personal user data that needs to be always current
+- **Security-related Features**: Authentication, permissions checking should never be cached
+
+### Frontend Caching
+
+The frontend implements smart client-side caching that:
+
+1. Tracks when data was last fetched
+2. Only requests new data when the cache expires
+3. Provides manual refresh buttons for immediate updates
+4. Shows last refresh time to users
+5. Optimizes API calls by bundling requests
+
+This dual-layer caching approach (backend + frontend) provides excellent performance while maintaining data freshness where needed. 

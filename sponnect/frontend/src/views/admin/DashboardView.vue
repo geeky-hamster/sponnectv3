@@ -7,6 +7,11 @@ const loading = ref(true)
 const error = ref('')
 const refreshing = ref(false)
 const refreshCount = ref(0)
+const lastRefreshTime = ref(null)
+// Added caching timestamps
+const statsCacheTime = ref(0)
+const dashboardSummaryCacheTime = ref(0)
+const pendingUsersCacheTime = ref(0)
 const stats = ref({
   total_users: 0,
   active_sponsors: 0,
@@ -71,101 +76,160 @@ const calculatePercentage = (status) => {
   return Math.round((stats.value.ad_requests_by_status?.[status] || 0) / total * 100)
 }
 
+// Calculate if data should be refreshed based on time elapsed
+const shouldRefreshData = (cacheTime, refreshInterval = 60000) => {
+  if (!cacheTime) return true
+  return Date.now() - cacheTime > refreshInterval
+}
+
 // Function to load admin data
 const loadAdminData = async (isManualRefresh = false) => {
   try {
     if (isManualRefresh) {
       refreshing.value = true;
       refreshCount.value++;
+      // Reset cache times on manual refresh
+      statsCacheTime.value = 0;
+      dashboardSummaryCacheTime.value = 0;
+      pendingUsersCacheTime.value = 0;
     } else {
       loading.value = true;
     }
     error.value = '';
     
-    // Make all API calls in parallel for real-time data
-    const [statsResponse, pendingSponsorsResponse, pendingInfluencersResponse, pendingUsersResponse, dashboardSummaryResponse] = await Promise.all([
-      adminService.getStats().catch(err => {
-        console.error('Error loading stats:', err);
-        return { 
-          data: {
-            total_users: 0,
-            active_sponsors: 0,
-            active_influencers: 0,
-            pending_sponsors: 0,
-            pending_influencers: 0,
-            public_campaigns: 0,
-            private_campaigns: 0,
-            ad_requests_by_status: {
-              Pending: 0,
-              Negotiating: 0,
-              Accepted: 0,
-              Rejected: 0
-            },
-            flagged_users: 0,
-            flagged_campaigns: 0
-          }
-        };
-      }),
-      adminService.getPendingSponsors().catch(err => {
-        console.error('Error loading pending sponsors:', err);
-        return { data: [] };
-      }),
-      adminService.getPendingInfluencers().catch(err => {
-        console.error('Error loading pending influencers:', err);
-        return { data: [] };
-      }),
-      adminService.getPendingUsers().catch(err => {
-        console.error('Error loading pending users:', err);
-        return { data: [] };
-      }),
-      adminService.getDashboardSummary().catch(err => {
-        console.error('Error loading dashboard summary:', err);
-        return { data: {
-          userSummary: { labels: [], datasets: [] },
-          campaignVisibility: { labels: [], datasets: [] },
-          adRequestStatus: { labels: [], datasets: [] },
-          conversionRate: { value: 0, label: 'Acceptance Rate' },
-          avgCampaignBudget: 0
-        }};
-      })
-    ]);
+    // Create an array to store all promises
+    const promises = [];
     
-    // Ensure stats data has all required properties
-    stats.value = {
-      total_users: 0,
-      active_sponsors: 0,
-      active_influencers: 0,
-      pending_sponsors: 0,
-      pending_influencers: 0,
-      public_campaigns: 0,
-      private_campaigns: 0,
-      ad_requests_by_status: {
-        Pending: 0,
-        Negotiating: 0,
-        Accepted: 0,
-        Rejected: 0
-      },
-      flagged_users: 0,
-      flagged_campaigns: 0,
-      ...statsResponse.data
-    };
+    // Only fetch stats if cache is expired (> 60 seconds) or on manual refresh
+    if (shouldRefreshData(statsCacheTime.value, 60000) || isManualRefresh) {
+      promises.push(
+        adminService.getStats().catch(err => {
+          console.error('Error loading stats:', err);
+          return { 
+            data: {
+              total_users: 0,
+              active_sponsors: 0,
+              active_influencers: 0,
+              pending_sponsors: 0,
+              pending_influencers: 0,
+              public_campaigns: 0,
+              private_campaigns: 0,
+              ad_requests_by_status: {
+                Pending: 0,
+                Negotiating: 0,
+                Accepted: 0,
+                Rejected: 0
+              },
+              flagged_users: 0,
+              flagged_campaigns: 0
+            }
+          };
+        })
+      );
+    } else {
+      // Push null if we're using cached data
+      promises.push(null);
+    }
     
-    // Ensure we have arrays for pending data
-    pendingSponsors.value = Array.isArray(pendingSponsorsResponse.data) ? pendingSponsorsResponse.data : [];
-    pendingInfluencers.value = Array.isArray(pendingInfluencersResponse.data) ? pendingInfluencersResponse.data : [];
-    pendingUsers.value = Array.isArray(pendingUsersResponse.data) ? pendingUsersResponse.data : [];
+    // Only fetch pending users if cache is expired (> 15 seconds) or on manual refresh
+    if (shouldRefreshData(pendingUsersCacheTime.value, 15000) || isManualRefresh) {
+      promises.push(
+        adminService.getPendingSponsors().catch(err => {
+          console.error('Error loading pending sponsors:', err);
+          return { data: [] };
+        }),
+        adminService.getPendingInfluencers().catch(err => {
+          console.error('Error loading pending influencers:', err);
+          return { data: [] };
+        }),
+        adminService.getPendingUsers().catch(err => {
+          console.error('Error loading pending users:', err);
+          return { data: [] };
+        })
+      );
+    } else {
+      // Push nulls if we're using cached data
+      promises.push(null, null, null);
+    }
     
-    // Clean pending users data to ensure all required fields are present
-    pendingUsers.value = pendingUsers.value.map(user => ({
-      id: user.id || 0,
-      username: user.username || 'Unknown User',
-      email: user.email || 'no-email@example.com',
-      role: user.role || 'unknown',
-      created_at: user.created_at || new Date().toISOString(),
-      ...user
-    }));
+    // Only fetch dashboard summary if cache is expired (> 120 seconds) or on manual refresh
+    if (shouldRefreshData(dashboardSummaryCacheTime.value, 120000) || isManualRefresh) {
+      promises.push(
+        adminService.getDashboardSummary().catch(err => {
+          console.error('Error loading dashboard summary:', err);
+          return { data: {
+            userSummary: { labels: [], datasets: [] },
+            campaignVisibility: { labels: [], datasets: [] },
+            adRequestStatus: { labels: [], datasets: [] },
+            conversionRate: { value: 0, label: 'Acceptance Rate' },
+            avgCampaignBudget: 0
+          }};
+        })
+      );
+    } else {
+      // Push null if we're using cached data
+      promises.push(null);
+    }
     
-    // Ensure dashboard summary has valid structure before assigning
+    // Make all API calls in parallel
+    const responses = await Promise.all(promises);
+    
+    // Process stats response
+    const statsResponse = responses[0];
+    if (statsResponse) {
+      // Ensure stats data has all required properties
+      stats.value = {
+        total_users: 0,
+        active_sponsors: 0,
+        active_influencers: 0,
+        pending_sponsors: 0,
+        pending_influencers: 0,
+        public_campaigns: 0,
+        private_campaigns: 0,
+        ad_requests_by_status: {
+          Pending: 0,
+          Negotiating: 0,
+          Accepted: 0,
+          Rejected: 0
+        },
+        flagged_users: 0,
+        flagged_campaigns: 0,
+        ...statsResponse.data
+      };
+      statsCacheTime.value = Date.now();
+    }
+    
+    // Process pending users responses
+    const pendingSponsorsResponse = responses[1];
+    const pendingInfluencersResponse = responses[2];
+    const pendingUsersResponse = responses[3];
+    
+    if (pendingSponsorsResponse) {
+      pendingSponsors.value = Array.isArray(pendingSponsorsResponse.data) ? pendingSponsorsResponse.data : [];
+      pendingUsersCacheTime.value = Date.now();
+    }
+    
+    if (pendingInfluencersResponse) {
+      pendingInfluencers.value = Array.isArray(pendingInfluencersResponse.data) ? pendingInfluencersResponse.data : [];
+      pendingUsersCacheTime.value = Date.now();
+    }
+    
+    if (pendingUsersResponse) {
+      pendingUsers.value = Array.isArray(pendingUsersResponse.data) ? pendingUsersResponse.data : [];
+      // Clean pending users data to ensure all required fields are present
+      pendingUsers.value = pendingUsers.value.map(user => ({
+        id: user.id || 0,
+        username: user.username || 'Unknown User',
+        email: user.email || 'no-email@example.com',
+        role: user.role || 'unknown',
+        created_at: user.created_at || new Date().toISOString(),
+        ...user
+      }));
+      pendingUsersCacheTime.value = Date.now();
+    }
+    
+    // Process dashboard summary response
+    const dashboardSummaryResponse = responses[4];
     if (dashboardSummaryResponse && dashboardSummaryResponse.data) {
       // Make sure conversionRate exists and has a valid value
       if (!dashboardSummaryResponse.data.conversionRate) {
@@ -181,7 +245,11 @@ const loadAdminData = async (isManualRefresh = false) => {
       });
       
       dashboardSummary.value = dashboardSummaryResponse.data;
+      dashboardSummaryCacheTime.value = Date.now();
     }
+    
+    // Update last refresh time
+    lastRefreshTime.value = new Date().toLocaleTimeString();
   } catch (err) {
     console.error('Error loading admin data:', err);
     error.value = 'Failed to load admin dashboard data. Please refresh the page or try again later.';
@@ -200,7 +268,7 @@ onMounted(() => {
   // Load data immediately
   loadAdminData()
   
-  // Set up auto-refresh every 60 seconds instead of 10 seconds to reduce refresh frequency
+  // Set up auto-refresh every 60 seconds
   refreshInterval = setInterval(() => loadAdminData(false), 60000)
 })
 
@@ -309,26 +377,29 @@ const rejectUser = async (user) => {
 </script>
 
 <template>
-  <div class="admin-dashboard py-5">
-    <div class="container">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="dashboard-title">Admin Dashboard</h1>
+  <div class="admin-dashboard py-3 py-md-5">
+    <div class="container-fluid container-md">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+        <h1 class="h2 mb-3 mb-md-0 dashboard-title">Admin Dashboard</h1>
+        
         <div class="d-flex align-items-center">
-          <div class="badge bg-success me-2 d-inline-flex align-items-center">
-            <span class="me-1">Auto-refresh: 60s</span>
-            <span class="pulse-dot"></span>
-          </div>
-          <button @click="refreshDashboard" class="btn btn-outline-primary" 
-                  :disabled="refreshing" title="Manually refresh dashboard data">
+          <span class="text-muted me-3" v-if="lastRefreshTime">
+            <small><i class="bi bi-clock me-1"></i>Last updated: {{ lastRefreshTime }}</small>
+          </span>
+          <button 
+            class="btn btn-sm btn-primary" 
+            @click="refreshDashboard"
+            :disabled="refreshing"
+          >
             <i class="bi" :class="refreshing ? 'bi-arrow-repeat spin' : 'bi-arrow-clockwise'"></i>
-            <span class="ms-1">{{ refreshing ? 'Refreshing...' : 'Refresh' }}</span>
-            <small v-if="refreshCount > 0" class="ms-1">({{ refreshCount }})</small>
+            <span v-if="!refreshing">Refresh</span>
+            <span v-else>Refreshing...</span>
           </button>
         </div>
       </div>
       
-      <!-- Error Alert -->
-      <div v-if="error" class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+      <!-- Alert Messages -->
+      <div v-if="error" class="alert alert-danger alert-dismissible fade show" role="alert">
         {{ error }}
         <button type="button" class="btn-close" @click="error = ''"></button>
       </div>
@@ -342,8 +413,8 @@ const rejectUser = async (user) => {
       </div>
       
       <div v-else>
-        <!-- Stats Overview -->
-        <div class="row mb-4">
+        <!-- Summary Cards Row -->
+        <div class="row g-3 g-md-4 mb-4">
           <div class="col-md-4 col-sm-6 mb-3">
             <div class="card border-0 dashboard-card gradient-blue h-100">
               <div class="card-body p-4">

@@ -94,6 +94,27 @@ export const useAuthStore = defineStore('auth', () => {
   // Getters
   const isAuthenticated = computed(() => !!token.value)
   
+  // Initialize function
+  const initialize = async () => {
+    // Check if we have a token in localStorage
+    const storedToken = localStorage.getItem('token')
+    if (storedToken) {
+      token.value = storedToken
+      userRole.value = localStorage.getItem('userRole')
+      
+      // Try to get the user profile if token exists
+      try {
+        await getProfile()
+      } catch (error) {
+        console.error('Failed to get user profile during initialization:', error)
+        // If the token is invalid, logout
+        if (error.response && error.response.status === 401) {
+          logout()
+        }
+      }
+    }
+  }
+  
   // Actions
   const login = async (credentials) => {
     try {
@@ -164,7 +185,8 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     logout,
-    getProfile
+    getProfile,
+    initialize
   }
 })
 

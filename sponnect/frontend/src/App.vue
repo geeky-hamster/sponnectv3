@@ -3,12 +3,32 @@ import { RouterView } from 'vue-router'
 import Navbar from './components/Navbar.vue'
 import { useAuthStore } from './stores/auth'
 import Footer from './components/Footer.vue'
-import { ref, onErrorCaptured } from 'vue'
+import { ref, onErrorCaptured, onMounted } from 'vue'
+import { formatDate } from './utils/formatters'
 
 const authStore = useAuthStore()
 
 // Add error handling for route loading errors
 const routeError = ref(null)
+
+// Override console.warn to capture and log date formatting issues
+const originalWarn = console.warn;
+console.warn = function(message, ...args) {
+  // Log all warnings, but look for specific date formatting issues
+  if (typeof message === 'string' && message.includes('Invalid date')) {
+    console.error('DATE FORMAT ERROR:', message, ...args);
+  }
+  originalWarn.apply(console, [message, ...args]);
+};
+
+// Add global date formatting debug function to window
+if (typeof window !== 'undefined') {
+  window.debugFormatDate = function(date) {
+    console.log('Date input:', date);
+    console.log('Formatted result:', formatDate(date));
+    return formatDate(date);
+  };
+}
 
 onErrorCaptured((err, instance, info) => {
   // Handle route loading errors gracefully
@@ -22,6 +42,11 @@ onErrorCaptured((err, instance, info) => {
     return false // prevent error from propagating
   }
   return true // let other errors propagate
+})
+
+onMounted(() => {
+  // Check if user is already logged in (token in localStorage)
+  authStore.initialize()
 })
 </script>
 

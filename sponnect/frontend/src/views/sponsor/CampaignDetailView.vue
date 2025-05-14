@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, reactive } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { sponsorService, negotiationService } from '../../services/api'
-import { formatDate } from '../../utils/dateUtils'
+import { formatDate, formatCurrency, formatDateTime } from '../../utils/formatters'
 
 const route = useRoute()
 const router = useRouter()
@@ -68,15 +68,6 @@ const loadCampaign = async () => {
   }
 }
 
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0
-  }).format(amount || 0)
-}
-
 // Handle campaign deletion
 const deleteCampaign = async () => {
   if (!confirm('Are you sure you want to delete this campaign? This action cannot be undone.')) {
@@ -116,6 +107,18 @@ const completeCampaign = async () => {
 // Check if campaign is expired but not completed
 const isExpired = computed(() => {
   if (!campaign.value || !campaign.value.end_date_iso) return false
+  
+  console.log("DEBUG: Campaign dates", {
+    start_date: campaign.value.start_date,
+    end_date: campaign.value.end_date,
+    created_at: campaign.value.created_at,
+    start_date_iso: campaign.value.start_date_iso,
+    end_date_iso: campaign.value.end_date_iso,
+    created_at_iso: campaign.value.created_at_iso,
+    formatted_start: formatDate(campaign.value.start_date_iso || campaign.value.start_date),
+    formatted_end: formatDate(campaign.value.end_date_iso || campaign.value.end_date),
+    formatted_created: formatDate(campaign.value.created_at_iso || campaign.value.created_at)
+  });
   
   const endDate = new Date(campaign.value.end_date_iso)
   const now = new Date()
@@ -442,7 +445,7 @@ onMounted(() => {
               >
                 {{ getStatusText }}
               </span>
-              <span class="text-muted">Created on {{ formatDate(campaign.created_at) }}</span>
+              <span class="text-muted">Created on {{ formatDate(campaign.created_at_iso || campaign.created_at) }}</span>
             </div>
           </div>
           <div class="d-flex">
@@ -556,12 +559,12 @@ onMounted(() => {
                     
                     <div class="mb-3 pb-3 border-bottom">
                       <h6 class="text-muted mb-1">Start Date</h6>
-                      <div>{{ formatDate(campaign.start_date) }}</div>
+                      <div>{{ formatDate(campaign.start_date_iso || campaign.start_date) }}</div>
                     </div>
                     
                     <div class="mb-3 pb-3 border-bottom">
                       <h6 class="text-muted mb-1">End Date</h6>
-                      <div>{{ formatDate(campaign.end_date) }}</div>
+                      <div>{{ formatDate(campaign.end_date_iso || campaign.end_date) }}</div>
                     </div>
                     
                     <div class="mb-3 pb-3 border-bottom">
@@ -680,7 +683,7 @@ onMounted(() => {
                           <i v-if="canRespond(request)" class="bi bi-exclamation-circle text-warning ms-1" 
                              title="Action required"></i>
                         </td>
-                        <td>{{ formatDate(request.updated_at) }}</td>
+                        <td>{{ formatDate(request.updated_at_iso || request.updated_at) }}</td>
                         <td>{{ request.last_offer_by }}</td>
                         <td>
                           <div class="btn-group">

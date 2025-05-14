@@ -2,6 +2,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { sponsorService } from '../../services/api'
 import { RouterLink } from 'vue-router'
+import { formatDate, formatCurrency } from '../../utils/formatters'
 
 // State
 const loading = ref(true)
@@ -118,76 +119,6 @@ const applyFilters = () => {
     
     return matchesSearch && matchesVisibility && matchesStatus
   })
-}
-
-// Format date for display
-const formatDate = (dateString) => {
-  if (!dateString) return "N/A"
-  
-  try {
-    // Handle different date formats - try ISO string first
-    let date;
-    
-    // If we have the ISO version, prefer using that
-    if (typeof dateString === 'string') {
-      // Add logging to debug
-      console.log(`Formatting date string: ${dateString}`);
-      
-      // Try to handle DD-MM-YYYY format
-      if (dateString.includes('-') && !dateString.includes('T')) {
-        const parts = dateString.split('-');
-        if (parts.length === 3) {
-          // Check if it's DD-MM-YYYY format
-          const firstPart = parseInt(parts[0], 10);
-          if (firstPart <= 31) {
-            // It's likely DD-MM-YYYY format
-            const day = firstPart;
-            const month = parseInt(parts[1], 10) - 1;
-            const year = parseInt(parts[2], 10);
-            date = new Date(year, month, day);
-          } else {
-            // It's likely YYYY-MM-DD format
-            const year = firstPart;
-            const month = parseInt(parts[1], 10) - 1;
-            const day = parseInt(parts[2], 10);
-            date = new Date(year, month, day);
-          }
-        } else {
-          date = new Date(dateString);
-        }
-      } else {
-        date = new Date(dateString);
-      }
-    } else {
-      date = new Date(dateString);
-    }
-    
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      console.error(`Invalid date: ${dateString}`);
-      return "Invalid date";
-    }
-    
-    // Use explicit formatting to avoid locale differences
-    const day = date.getDate().toString().padStart(2, "0");
-    const month = (date.getMonth() + 1).toString().padStart(2, "0"); // Months are 0-indexed
-    const year = date.getFullYear();
-    
-    // Format as DD-MM-YYYY
-    return `${day}-${month}-${year}`;
-  } catch (e) {
-    console.error("Error formatting date:", e, dateString);
-    return "Invalid date";
-  }
-}
-
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0
-  }).format(amount || 0)
 }
 
 // Delete campaign

@@ -3,6 +3,7 @@ import { ref, onMounted, computed, reactive, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { sponsorService, negotiationService } from '../../services/api'
 import { downloadPaymentReceipt } from '../../utils/pdf'
+import { formatDate, formatCurrency, formatDateTime } from '../../utils/formatters'
 
 const route = useRoute()
 const router = useRouter()
@@ -65,35 +66,6 @@ const loadAdRequest = async () => {
   } finally {
     loading.value = false
   }
-}
-
-// Format date
-const formatDate = (dateString) => {
-  if (!dateString) return "N/A"
-  
-  try {
-    const date = new Date(dateString)
-    
-    // Use explicit formatting to avoid locale differences
-    const day = date.getDate().toString().padStart(2, "0")
-    const month = (date.getMonth() + 1).toString().padStart(2, "0") // Months are 0-indexed
-    const year = date.getFullYear()
-    
-    // Format as DD-MM-YYYY
-    return `${day}-${month}-${year}`
-  } catch (e) {
-    console.error("Error formatting date:", e)
-    return "Invalid date"
-  }
-}
-
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0
-  }).format(amount || 0)
 }
 
 // Can sponsor respond to negotiation

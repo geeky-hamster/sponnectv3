@@ -222,7 +222,7 @@ onMounted(async () => {
                         Private
                       </span>
                     </td>
-                    <td>{{ formatDate(campaign.created_at) }}</td>
+                    <td>{{ formatDate(campaign.created_at_iso || campaign.created_at) }}</td>
                     <td>
                       <router-link :to="`/sponsor/campaigns/${campaign.id}`" class="btn btn-sm btn-outline-primary">
                         View
@@ -278,7 +278,7 @@ onMounted(async () => {
                         {{ request.status }}
                       </span>
                     </td>
-                    <td>{{ formatDate(request.updated_at) }}</td>
+                    <td>{{ formatDate(request.updated_at_iso || request.updated_at) }}</td>
                     <td>
                       <router-link :to="`/sponsor/ad-requests/${request.id}`" class="btn btn-sm btn-outline-primary">
                         View

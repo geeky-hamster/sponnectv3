@@ -628,7 +628,9 @@ onMounted(() => {
                                 {{ item.user_role === 'sponsor' ? 'You' : 'Influencer' }}
                                 {{ item.action === 'propose' ? 'proposed' :
                                    item.action === 'negotiate' ? 'counter-offered' :
-                                   item.action === 'accept' ? 'accepted' : 'rejected' }}
+                                   item.action === 'accept' ? 'accepted' : 
+                                   item.action === 'reject' ? 'rejected' :
+                                   item.action }}
                               </h6>
                               <small class="text-muted">{{ formatDateWithTime(item.created_at) }}</small>
                             </div>

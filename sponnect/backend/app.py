@@ -1600,7 +1600,7 @@ def search_campaigns():
     criteria = [
         User.sponsor_approved == True,
         User.is_active == True,
-        Campaign.start_date <= datetime.utcnow()
+        Campaign.start_date > datetime.utcnow()
     ]
     
     # Non-admin users shouldn't see flagged campaigns

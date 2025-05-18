@@ -343,8 +343,27 @@ const submitNegotiation = async () => {
 
 // Check if sponsor can respond
 const canRespond = (request) => {
-  return (request.status === 'Pending') || 
-         (request.status === 'Negotiating' && request.last_offer_by === 'influencer')
+  if (!request) return false;
+  
+  // When initiator_id is undefined, use last_offer_by to determine who initiated
+  const influencerInitiated = request.initiator_id 
+    ? (request.initiator_id === request.influencer_id)
+    : (request.last_offer_by === 'influencer');
+  
+  // Case 1: Influencer initiated request (application) with Pending status
+  // Sponsor needs to respond to the initial application
+  if (influencerInitiated && request.status === 'Pending') {
+    return true;
+  }
+  
+  // Case 2: Request is in Negotiating status and last offer was from influencer
+  // Sponsor needs to respond to influencer's counter offer
+  if (request.status === 'Negotiating' && request.last_offer_by === 'influencer') {
+    return true;
+  }
+  
+  // In all other cases, sponsor cannot respond
+  return false;
 }
 
 // Filter applications based on filter setting
@@ -688,8 +707,11 @@ onMounted(() => {
                         <td>{{ request.last_offer_by }}</td>
                         <td>
                           <div class="btn-group">
-                            <button @click="openAdRequestModal(request)" class="btn btn-sm btn-primary">
+                            <button v-if="canRespond(request)" @click="openAdRequestModal(request)" class="btn btn-sm btn-primary">
                               <i class="bi bi-eye me-1"></i> View & Respond
+                            </button>
+                            <button v-else @click="openAdRequestModal(request)" class="btn btn-sm btn-primary">
+                              <i class="bi bi-eye me-1"></i> View
                             </button>
                             <RouterLink :to="`/sponsor/ad-requests/${request.id}`" class="btn btn-sm btn-outline-primary">
                               Details

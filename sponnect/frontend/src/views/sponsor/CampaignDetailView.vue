@@ -2,7 +2,8 @@
 import { ref, onMounted, computed, reactive } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { sponsorService, negotiationService } from '../../services/api'
-import { formatDate, formatCurrency, formatDateTime } from '../../utils/formatters'
+import { formatCurrency } from '../../utils/formatters'
+import { formatDate, formatDateWithTime as formatDateTime } from '../../utils/dateUtils'
 
 const route = useRoute()
 const router = useRouter()

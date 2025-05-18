@@ -51,13 +51,14 @@ const disabledActions = computed(() => {
 
 // Load ad request details
 const loadAdRequest = async () => {
+  loading.value = true
+  error.value = ''
+  
   try {
-    loading.value = true
-    error.value = ''
-    
     // Use a direct API call to get a specific ad request by ID
     const response = await influencerService.getAdRequests({ id: requestId })
-    console.log("Ad request response:", response)
+    console.log("Raw ad request response:", response)
+    console.log("Ad request response data:", response.data)
     
     // Check if we have valid data
     if (!response.data || response.data.length === 0) {
@@ -87,6 +88,7 @@ const loadAdRequest = async () => {
       // Load negotiation history if available
       try {
         const historyResponse = await influencerService.getNegotiationHistory(requestId)
+        console.log("Negotiation history response:", historyResponse)
         negotiationHistory.value = historyResponse.data.history || []
       } catch (historyErr) {
         console.error('Failed to load negotiation history:', historyErr)
@@ -117,94 +119,164 @@ const formatCurrency = (amount) => {
 
 // Validate form
 const validateForm = () => {
-  let isValid = true
-  
   // Reset errors
-  formErrors.action = ''
-  formErrors.counterOffer = ''
-  formErrors.message = ''
+  formErrors.action = '';
+  formErrors.counterOffer = '';
+  formErrors.message = '';
   
   // Validate action
   if (!form.action) {
-    formErrors.action = 'Please select an action'
-    isValid = false
+    formErrors.action = 'Please select an action (Accept, Counter Offer, or Reject)';
+    return false;
   }
   
   // Validate counter offer if negotiating
   if (form.action === 'negotiate') {
     if (!form.counterOffer) {
-      formErrors.counterOffer = 'Please enter your counter offer amount'
-      isValid = false
-    } else if (form.counterOffer <= 0) {
-      formErrors.counterOffer = 'Amount must be greater than zero'
-      isValid = false
+      formErrors.counterOffer = 'Please enter your counter offer amount';
+      return false;
+    }
+    
+    // Parse numeric value
+    const amount = parseFloat(form.counterOffer);
+    
+    if (isNaN(amount) || amount <= 0) {
+      formErrors.counterOffer = 'Counter offer amount must be a positive number';
+      return false;
+    }
+    
+    // Check if message is provided for negotiation (required)
+    if (!form.message || !form.message.trim()) {
+      formErrors.message = 'Please provide an explanation for your counter offer';
+      return false;
     }
   }
   
-  // Validate message for negotiate or reject
-  if (['negotiate', 'reject'].includes(form.action) && !form.message.trim()) {
-    formErrors.message = `Please provide a message explaining your ${form.action === 'negotiate' ? 'counter offer' : 'rejection'}`
-    isValid = false
+  // Validate message for reject (required)
+  if (form.action === 'reject' && (!form.message || !form.message.trim())) {
+    formErrors.message = 'Please provide a reason for rejecting the offer';
+    return false;
   }
   
-  return isValid
+  return true;
 }
 
-// Handle form submission
+// Computed property to determine if influencer should see response form
+const showResponseForm = computed(() => {
+  if (!adRequest.value) return false;
+  
+  // Completed requests can't be responded to
+  if (adRequest.value.status === 'Accepted' || adRequest.value.status === 'Rejected') {
+    return false;
+  }
+  
+  // When initiator_id is undefined, use last_offer_by to determine who initiated
+  const influencerInitiated = adRequest.value.initiator_id 
+    ? (adRequest.value.initiator_id === adRequest.value.influencer_id)
+    : (adRequest.value.last_offer_by === 'influencer');
+    
+  const lastOfferBySponsor = adRequest.value.last_offer_by === 'sponsor';
+  
+  let shouldShowForm = false;
+  let reason = '';
+  
+  // Case 1: Influencer initiated request
+  if (influencerInitiated) {
+    // If pending, influencer is waiting for sponsor - can't respond to own request
+    if (adRequest.value.status === 'Pending') {
+      shouldShowForm = false;
+      reason = 'Influencer initiated and pending - waiting for sponsor';
+    }
+    // If negotiating, influencer can only respond if sponsor made last offer
+    else if (adRequest.value.status === 'Negotiating') {
+      shouldShowForm = lastOfferBySponsor;
+      reason = lastOfferBySponsor ? 
+        'Influencer initiated, negotiating, and sponsor made last offer - show form' :
+        'Influencer initiated, negotiating, but influencer made last offer - hide form';
+    }
+  } 
+  // Case 2: Sponsor initiated request
+  else {
+    // If pending, influencer must respond to sponsor's initial offer
+    if (adRequest.value.status === 'Pending') {
+      shouldShowForm = true;
+      reason = 'Sponsor initiated and pending - show form for influencer to respond';
+    }
+    // If negotiating, influencer can only respond if sponsor made last offer
+    else if (adRequest.value.status === 'Negotiating') {
+      shouldShowForm = lastOfferBySponsor;
+      reason = lastOfferBySponsor ?
+        'Sponsor initiated, negotiating, and sponsor made last offer - show form' :
+        'Sponsor initiated, negotiating, but influencer made last offer - hide form';
+    }
+  }
+  
+  console.log("showResponseForm decision:", { 
+    shouldShowForm, 
+    reason,
+    initiator: influencerInitiated ? 'influencer' : 'sponsor',
+    status: adRequest.value.status,
+    lastOfferBy: adRequest.value.last_offer_by
+  });
+  
+  return shouldShowForm;
+});
+
+// Handle form submission with improved logging and error handling
 const handleSubmit = async () => {
-  if (!validateForm()) return
+  if (!validateForm()) return;
   
   try {
-    submitLoading.value = true
-    error.value = ''
-    successMessage.value = ''
+    submitLoading.value = true;
+    error.value = '';
+    successMessage.value = '';
     
     // Build the payload based on the action
     const payload = {
       action: form.action,
-      message: form.message,
-      payment_amount: form.action === 'negotiate' ? parseFloat(form.counterOffer) : adRequest.value.payment_amount
-    }
+      message: form.action !== 'accept' ? form.message : undefined,
+      payment_amount: form.action === 'negotiate' ? parseFloat(form.counterOffer) : undefined
+    };
     
-    console.log("Sending payload to server:", payload)
+    console.log(`Sending ${form.action} response:`, payload);
     
     // Send the response to the ad request
-    const response = await influencerService.respondToAdRequest(adRequest.value.id, payload)
-    console.log("Server response:", response)
+    const response = await influencerService.respondToAdRequest(adRequest.value.id, payload);
+    console.log("Server response:", response);
     
-    // Update success message
+    // Update success message based on action
     successMessage.value = form.action === 'accept' 
-      ? 'Offer accepted successfully! The sponsor will be notified.' 
+      ? 'Offer accepted successfully! The partnership is now active.' 
       : form.action === 'reject'
-        ? 'Offer rejected. The sponsor will be notified.' 
-        : 'Counter offer sent. Waiting for the sponsor to respond.'
+        ? 'Offer rejected. The sponsor has been notified.' 
+        : 'Counter offer sent. Waiting for the sponsor to respond.';
     
     // Reset form
-    form.action = ''
-    form.message = ''
-    form.counterOffer = null
+    form.action = '';
+    form.message = '';
+    form.counterOffer = null;
     
     // Reload ad request to get updated status
-    await loadAdRequest()
+    await loadAdRequest();
     
   } catch (err) {
-    console.error('Failed to respond to ad request:', err)
+    console.error('Failed to respond to ad request:', err);
     
-    let errorMessage = 'Failed to submit your response. Please try again later.'
+    let errorMessage = 'Failed to submit your response. Please try again later.';
     
     // Get specific error from response if available
     if (err.response && err.response.data && err.response.data.message) {
-      errorMessage = `Error: ${err.response.data.message}`
+      errorMessage = `Error: ${err.response.data.message}`;
       
       // Add status information if available
       if (err.response.data.status) {
-        errorMessage += ` (Status: ${err.response.data.status}, Last action by: ${err.response.data.last_offer_by || 'unknown'})`
+        errorMessage += ` (Status: ${err.response.data.status}, Last action by: ${err.response.data.last_offer_by || 'unknown'})`;
       }
     }
     
-    error.value = errorMessage
+    error.value = errorMessage;
   } finally {
-    submitLoading.value = false
+    submitLoading.value = false;
   }
 }
 
@@ -341,10 +413,29 @@ const loadPayments = async () => {
 const enhancedLoadAdRequest = async () => {
   await loadAdRequest()
   
-  // If request is accepted, load additional data
-  if (adRequest.value && adRequest.value.status === 'Accepted') {
-    await loadProgressUpdates()
-    await loadPayments()
+  // Debug the initiator identification
+  if (adRequest.value) {
+    // Calculate the correct initiator when initiator_id is undefined
+    const determinedInitiator = adRequest.value.initiator_id 
+      ? (adRequest.value.initiator_id === adRequest.value.influencer_id)
+      : (adRequest.value.last_offer_by === 'influencer');
+      
+    console.log("AdRequest details:", {
+      id: adRequest.value.id,
+      initiator_id: adRequest.value.initiator_id,
+      influencer_id: adRequest.value.influencer_id,
+      is_influencer_initiated: determinedInitiator,
+      raw_initiator_check: adRequest.value.initiator_id === adRequest.value.influencer_id,
+      fallback_initiator_check: adRequest.value.last_offer_by === 'influencer',
+      status: adRequest.value.status,
+      last_offer_by: adRequest.value.last_offer_by
+    });
+    
+    // If request is accepted, load additional data
+    if (adRequest.value.status === 'Accepted') {
+      await loadProgressUpdates()
+      await loadPayments()
+    }
   }
 }
 
@@ -353,15 +444,89 @@ onMounted(() => {
   enhancedLoadAdRequest()
 })
 
-// Computed property to determine if influencer can respond
-const canRespond = computed(() => {
-  if (!adRequest.value) return false
+// Computed property to determine workflow state
+const workflowState = computed(() => {
+  if (!adRequest.value) return { type: 'loading' };
   
-  // Can respond if status is Pending (initial response) 
-  // or if status is Negotiating and last offer was made by sponsor
-  return (adRequest.value.status === 'Pending') || 
-         (adRequest.value.status === 'Negotiating' && adRequest.value.last_offer_by === 'sponsor')
-})
+  const isPending = adRequest.value.status === 'Pending';
+  const isNegotiating = adRequest.value.status === 'Negotiating';
+  const isAccepted = adRequest.value.status === 'Accepted';
+  const isRejected = adRequest.value.status === 'Rejected';
+  
+  // When initiator_id is undefined, use last_offer_by to determine who initiated
+  const influencerInitiated = adRequest.value.initiator_id 
+    ? (adRequest.value.initiator_id === adRequest.value.influencer_id)
+    : (adRequest.value.last_offer_by === 'influencer');
+    
+  const lastOfferBySponsor = adRequest.value.last_offer_by === 'sponsor';
+  
+  // Log the state calculation variables
+  console.log("Workflow state calculation:", {
+    status: adRequest.value.status,
+    influencerInitiated,
+    lastOfferBySponsor
+  });
+  
+  // Case 1: Completed states
+  if (isAccepted) return { type: 'accepted' };
+  if (isRejected) return { type: 'rejected' };
+  
+  // Case 2: Influencer initiated the request
+  if (influencerInitiated) {
+    if (isPending) {
+      return { 
+        type: 'waiting',
+        message: 'Your application is waiting for sponsor review',
+        badge: 'Waiting for sponsor'
+      };
+    }
+    
+    if (isNegotiating && !lastOfferBySponsor) {
+      return { 
+        type: 'waiting',
+        message: 'Your counter offer is waiting for sponsor response',
+        badge: 'Waiting for sponsor'
+      };
+    }
+    
+    if (isNegotiating && lastOfferBySponsor) {
+      return { 
+        type: 'action_required',
+        message: 'The sponsor has sent a counter offer',
+        action: 'respond_to_counter'
+      };
+    }
+  } 
+  // Case 3: Sponsor initiated the request
+  else {
+    if (isPending) {
+      return { 
+        type: 'action_required', 
+        message: 'The sponsor has sent you an offer',
+        action: 'respond_to_initial'
+      };
+    }
+    
+    if (isNegotiating && !lastOfferBySponsor) {
+      return { 
+        type: 'waiting',
+        message: 'Your counter offer is waiting for sponsor response',
+        badge: 'Waiting for sponsor'
+      };
+    }
+    
+    if (isNegotiating && lastOfferBySponsor) {
+      return { 
+        type: 'action_required',
+        message: 'The sponsor has sent a counter offer',
+        action: 'respond_to_counter'
+      };
+    }
+  }
+  
+  // Default fallback
+  return { type: 'unknown' };
+});
 
 // Download payment receipt
 const downloadReceipt = (payment) => {
@@ -379,6 +544,49 @@ const downloadReceipt = (payment) => {
   
   downloadPaymentReceipt(enhancedPayment, formatCurrency)
 }
+
+// Computed property to sort and filter negotiation history
+const sortedNegotiationHistory = computed(() => {
+  if (!negotiationHistory.value || negotiationHistory.value.length === 0) {
+    return [];
+  }
+  
+  // First, deeply clone the array to avoid mutations
+  const history = JSON.parse(JSON.stringify(negotiationHistory.value));
+  
+  // Sort by created_at timestamp (oldest first)
+  history.sort((a, b) => {
+    const dateA = new Date(a.created_at);
+    const dateB = new Date(b.created_at);
+    return dateA - dateB;
+  });
+  
+  // Check for final accept/reject actions
+  const finalActions = history.filter(item => 
+    item.action === 'accept' || item.action === 'reject'
+  );
+  
+  if (finalActions.length > 0) {
+    // Get the last final action (which should be the definitive one)
+    const latestFinalAction = finalActions[finalActions.length - 1];
+    
+    // Filter out any contradicting final actions
+    // Keep only the latest if there are multiple
+    const filteredHistory = history.filter(item => {
+      // If this is a final action but not the latest one, filter it out
+      if ((item.action === 'accept' || item.action === 'reject') && 
+          item.id !== latestFinalAction.id) {
+        return false;
+      }
+      return true;
+    });
+    
+    return filteredHistory;
+  }
+  
+  // If there are no final actions, just return the sorted history
+  return history;
+});
 </script>
 
 <template>
@@ -543,14 +751,63 @@ const downloadReceipt = (payment) => {
               <div class="card-body">
                 <h5 class="card-title border-bottom pb-2 mb-3">Negotiation History</h5>
                 
-                <!-- Action Required Alert - When influencer needs to respond -->
-                <div v-if="canRespond" class="alert alert-info mb-4">
-                  <div class="d-flex justify-content-between mb-2">
-                    <h6 class="alert-heading font-weight-bold mb-0">Respond to Offer</h6>
-                    <span class="badge bg-warning">Action Required</span>
+                <!-- Current Status Alert when no action needed -->
+                <div v-if="adRequest && !showResponseForm" class="alert mb-4" :class="{
+                  'alert-success': adRequest.status === 'Accepted',
+                  'alert-danger': adRequest.status === 'Rejected',
+                  'alert-warning': ((adRequest.initiator_id === adRequest.influencer_id || 
+                                  (!adRequest.initiator_id && adRequest.last_offer_by === 'influencer')) && 
+                                 adRequest.status === 'Pending') ||
+                                 (adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'influencer')
+                }">
+                  <div class="d-flex justify-content-between">
+                    <h6 class="alert-heading font-weight-bold mb-1">
+                      <i class="bi bi-info-circle me-2"></i>Status: {{ adRequest.status }}
+                    </h6>
+                    <span v-if="((adRequest.initiator_id === adRequest.influencer_id || 
+                                (!adRequest.initiator_id && adRequest.last_offer_by === 'influencer')) && 
+                               adRequest.status === 'Pending') || 
+                              (adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'influencer')" 
+                          class="badge bg-warning">Waiting for sponsor</span>
                   </div>
                   
-                  <p>The sponsor has offered <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong> for this collaboration.</p>
+                  <!-- Accepted state -->
+                  <p v-if="adRequest.status === 'Accepted'" class="mb-0">
+                    <i class="bi bi-check-circle me-1"></i> The collaboration has been accepted at <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong>. The partnership is now active.
+                  </p>
+                  
+                  <!-- Rejected state -->
+                  <p v-else-if="adRequest.status === 'Rejected'" class="mb-0">
+                    <i class="bi bi-x-circle me-1"></i> This offer has been rejected and the negotiation is closed.
+                  </p>
+                  
+                  <!-- Influencer initiated application, waiting for sponsor -->
+                  <p v-else-if="adRequest.status === 'Pending' && adRequest.initiator_id === adRequest.influencer_id" class="mb-0">
+                    <i class="bi bi-hourglass me-1"></i> Your application with an offer of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong> is pending sponsor review. No action needed at this time.
+                  </p>
+                  
+                  <!-- Influencer made counter offer, waiting for sponsor -->
+                  <p v-else-if="adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'influencer'" class="mb-0">
+                    <i class="bi bi-hourglass me-1"></i> Your counter offer of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong> is waiting for the sponsor to respond.
+                  </p>
+                </div>
+                
+                <!-- Action Required Alert - When influencer needs to respond -->
+                <div v-if="showResponseForm" class="alert alert-info mb-4">
+                  <div class="d-flex justify-content-between mb-2">
+                    <h6 class="alert-heading font-weight-bold mb-0">
+                      <i class="bi bi-exclamation-circle me-2"></i>Action Required
+                    </h6>
+                    <span class="badge bg-warning">Your Turn</span>
+                  </div>
+                  
+                  <p v-if="adRequest.initiator_id !== adRequest.influencer_id && adRequest.status === 'Pending'">
+                    <strong>The sponsor has sent an offer</strong> of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong> for this collaboration.
+                  </p>
+                  <p v-else-if="adRequest.last_offer_by === 'sponsor' && adRequest.status === 'Negotiating'">
+                    <strong>The sponsor has sent a counter offer</strong> of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong>.
+                  </p>
+                  
                   <p v-if="adRequest.message" class="mt-2">
                     <strong>Message from Sponsor:</strong> {{ adRequest.message }}
                   </p>
@@ -561,20 +818,31 @@ const downloadReceipt = (payment) => {
                     <div class="mb-3">
                       <div class="mb-2"><strong>How would you like to respond?</strong></div>
                       <div class="form-group mb-3">
-                        <div v-for="action in actions" :key="action.value" class="form-check mb-2">
-                          <input 
-                            class="form-check-input" 
-                            type="radio" 
-                            :id="`action-${action.value}`" 
-                            name="action"
-                            :value="action.value"
-                            v-model="form.action"
-                            :disabled="disabledActions.includes(action.value)"
+                        <div class="mb-3 btn-group w-100">
+                          <button 
+                            type="button"
+                            @click="form.action = 'accept'" 
+                            :class="['btn', form.action === 'accept' ? 'btn-success' : 'btn-outline-success']"
+                            :disabled="disabledActions.includes('accept')"
                           >
-                          <label class="form-check-label d-flex align-items-center" :for="`action-${action.value}`">
-                            <span class="fw-bold me-2">{{ action.label }}</span>
-                            <span class="text-muted small">{{ action.description }}</span>
-                          </label>
+                            <i class="bi bi-check-circle me-1"></i> Accept Offer
+                          </button>
+                          <button 
+                            type="button"
+                            @click="form.action = 'negotiate'" 
+                            :class="['btn', form.action === 'negotiate' ? 'btn-primary' : 'btn-outline-primary']"
+                            :disabled="disabledActions.includes('negotiate')"
+                          >
+                            <i class="bi bi-arrow-left-right me-1"></i> Counter Offer
+                          </button>
+                          <button 
+                            type="button"
+                            @click="form.action = 'reject'" 
+                            :class="['btn', form.action === 'reject' ? 'btn-danger' : 'btn-outline-danger']"
+                            :disabled="disabledActions.includes('reject')"
+                          >
+                            <i class="bi bi-x-circle me-1"></i> Reject
+                          </button>
                         </div>
                       </div>
                       <div v-if="formErrors.action" class="text-danger small mb-3">{{ formErrors.action }}</div>
@@ -599,7 +867,8 @@ const downloadReceipt = (payment) => {
                     
                     <div v-if="form.action === 'negotiate' || form.action === 'reject'" class="form-group mb-3">
                       <label for="message" class="form-label">
-                        {{ form.action === 'negotiate' ? 'Explain your counter offer' : 'Reason for rejection' }} (Required)
+                        {{ form.action === 'negotiate' ? 'Explain your counter offer' : 'Reason for rejection' }}
+                        <span class="text-danger">*</span>
                       </label>
                       <textarea 
                         id="message" 
@@ -616,7 +885,7 @@ const downloadReceipt = (payment) => {
                         type="button" 
                         class="btn btn-primary" 
                         @click="handleSubmit"
-                        :disabled="submitLoading"
+                        :disabled="submitLoading || !form.action"
                       >
                         <span v-if="submitLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                         <i v-else class="bi bi-send me-1"></i>
@@ -626,36 +895,11 @@ const downloadReceipt = (payment) => {
                   </div>
                 </div>
                 
-                <!-- Current Status Alert when no action needed -->
-                <div v-else-if="adRequest" class="alert mb-4" :class="{
-                  'alert-success': adRequest.status === 'Accepted',
-                  'alert-danger': adRequest.status === 'Rejected',
-                  'alert-warning': adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'influencer',
-                  'alert-info': adRequest.status === 'Pending'
-                }">
-                  <div class="d-flex justify-content-between">
-                    <h6 class="alert-heading font-weight-bold mb-1">Status: {{ adRequest.status }}</h6>
-                    <span v-if="adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'influencer'" class="badge bg-warning">Waiting for sponsor</span>
-                  </div>
-                  <p class="mb-0" v-if="adRequest.status === 'Accepted'">
-                    <i class="bi bi-check-circle me-1"></i> You have accepted the offer of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong>. The collaboration is now active.
-                  </p>
-                  <p class="mb-0" v-else-if="adRequest.status === 'Rejected'">
-                    <i class="bi bi-x-circle me-1"></i> This offer has been rejected and the negotiation is closed.
-                  </p>
-                  <p class="mb-0" v-else-if="adRequest.status === 'Negotiating' && adRequest.last_offer_by === 'influencer'">
-                    <i class="bi bi-hourglass me-1"></i> You made a counter offer of <strong>{{ formatCurrency(adRequest.payment_amount) }}</strong>. Waiting for the sponsor to respond.
-                  </p>
-                  <p class="mb-0" v-else-if="adRequest.status === 'Pending'">
-                    <i class="bi bi-clock me-1"></i> This request is pending your initial response.
-                  </p>
-                </div>
-                
                 <!-- Negotiation History Timeline -->
-                <div v-if="negotiationHistory && negotiationHistory.length > 0" class="timeline mt-4">
+                <div v-if="sortedNegotiationHistory && sortedNegotiationHistory.length > 0" class="timeline mt-4">
                   <h6 class="mb-3">Negotiation Timeline</h6>
                   
-                  <div v-for="(item, index) in negotiationHistory" :key="index" class="timeline-item mb-4">
+                  <div v-for="(item, index) in sortedNegotiationHistory" :key="index" class="timeline-item mb-4">
                     <div class="d-flex">
                       <div :class="[
                         'timeline-badge me-3',
@@ -915,7 +1159,7 @@ const downloadReceipt = (payment) => {
         </div>
         
         <!-- Response Form -->
-        <div class="card border-0 shadow-sm mb-4">
+        <div v-if="showResponseForm" class="card border-0 shadow-sm mb-4">
           <div class="card-header bg-white border-0 py-3">
             <h5 class="card-title mb-0">Respond to Request</h5>
           </div>

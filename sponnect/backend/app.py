@@ -1594,13 +1594,16 @@ def search_campaigns():
     # 2. Campaign should not be flagged (unless user is admin)
     # 3. Sponsor must be approved
     # 4. Sponsor user must be active
-    # 5. Campaign dates should make sense (start date <= today)
+    # 5. Campaign end dates should be in the future or null
     
     # Start with basic criteria
     criteria = [
         User.sponsor_approved == True,
         User.is_active == True,
-        Campaign.start_date > datetime.utcnow()
+        or_(
+            Campaign.end_date == None,
+            Campaign.end_date >= datetime.utcnow()
+        )
     ]
     
     # Non-admin users shouldn't see flagged campaigns
